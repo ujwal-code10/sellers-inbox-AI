@@ -1,6 +1,6 @@
 import auth, { AuthRequest } from "../middleware/auth.js";
 import express from "express";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pool from "../utils/db.js";
 
@@ -39,8 +39,8 @@ router.post("/signup", async (req, res) => {
     if (err.code === "23505") {
       return res.status(400).json({ error: "Email already exists" });
     }
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
+    console.error("Signup error:", err);
+    res.status(500).json({ error: "Server error", details: err?.message || String(err) });
   }
 });
 
@@ -82,9 +82,9 @@ router.post("/login", async (req, res) => {
         email: user.email
       }
     }); 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
+  } catch (err: any) {
+    console.error("Login error:", err);
+    res.status(500).json({ error: "Server error", details: err?.message || String(err) });
   }
 });
 
@@ -100,9 +100,9 @@ router.get("/me", auth, async (req: AuthRequest, res) => {
     }
 
     res.json({ user: result.rows[0] });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
+  } catch (err: any) {
+    console.error("Me error:", err);
+    res.status(500).json({ error: "Server error", details: err?.message || String(err) });
   }
 });
 
