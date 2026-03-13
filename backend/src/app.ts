@@ -1,14 +1,14 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+
+dotenv.config();
+
 import authRoutes from "./routes/auth";
 import productRoutes from "./routes/products.js";
 import variantRoutes from "./routes/variants.js";
 import deliveryRoutes from "./routes/delivery.js";
 import aiRoutes from "./routes/ai.js";
-
-
-dotenv.config();
 
 const app = express();
 

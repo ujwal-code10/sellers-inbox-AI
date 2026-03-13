@@ -1,0 +1,164 @@
+const API_BASE = '/api'
+
+export interface User {
+  id: number
+  name: string
+  email: string
+  created_at?: string
+}
+
+export interface AuthResponse {
+  token: string
+  user: User
+}
+
+export interface MeResponse {
+  user: User
+}
+
+export interface Product {
+  id: number
+  name: string
+  price: number
+}
+
+export interface Variant {
+  id: number
+  product_id: number
+  color: string
+  size: string
+  available: boolean
+}
+
+export interface DeliveryZone {
+  id: number
+  name: string
+  price: number
+  cod_available: boolean
+  created_at?: string
+}
+
+class ApiClient {
+  private getToken(): string | null {
+    return localStorage.getItem('token')
+  }
+
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const token = this.getToken()
+
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    }
+
+    if (token) {
+      ;(headers as Record<string, string>)['Authorization'] = `Bearer ${token}`
+    }
+
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Request failed' }))
+      throw new Error(error.error || 'Request failed')
+    }
+
+    return response.json()
+  }
+
+  // Auth endpoints
+  async signup(name: string, email: string, password: string): Promise<AuthResponse> {
+    return this.request<AuthResponse>('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, password }),
+    })
+  }
+
+  async login(email: string, password: string): Promise<AuthResponse> {
+    return this.request<AuthResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    })
+  }
+
+  async getMe(): Promise<MeResponse> {
+    return this.request<MeResponse>('/auth/me')
+  }
+
+  // AI endpoint
+  async suggestReply(customerMessage: string): Promise<{ suggestions: string[]; decision: any }> {
+    return this.request('/ai/suggest-reply', {
+      method: 'POST',
+      body: JSON.stringify({ customerMessage }),
+    })
+  }
+
+  // Products endpoints
+  async getProducts(): Promise<Product[]> {
+    return this.request<Product[]>('/products')
+  }
+
+  async createProduct(name: string, price: number): Promise<Product> {
+    return this.request<Product>('/products', {
+      method: 'POST',
+      body: JSON.stringify({ name, price }),
+    })
+  }
+
+  async deleteProduct(id: number): Promise<void> {
+    return this.request(`/products/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Variants endpoints
+  async getVariants(productId: number): Promise<Variant[]> {
+    return this.request<Variant[]>(`/products/${productId}/variants`)
+  }
+
+  async createVariant(productId: number, color: string, size: string, available: boolean = true): Promise<Variant> {
+    return this.request<Variant>(`/products/${productId}/variants`, {
+      method: 'POST',
+      body: JSON.stringify({ color, size, available }),
+    })
+  }
+
+  async updateVariant(variantId: number, available: boolean): Promise<Variant> {
+    return this.request<Variant>(`/variants/${variantId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ available }),
+    })
+  }
+
+  // Delivery zones endpoints
+  async getDeliveryZones(): Promise<DeliveryZone[]> {
+    return this.request<DeliveryZone[]>('/delivery-zones')
+  }
+
+  async createDeliveryZone(name: string, price: number, codAvailable: boolean = true): Promise<DeliveryZone> {
+    return this.request<DeliveryZone>('/delivery-zones', {
+      method: 'POST',
+      body: JSON.stringify({ name, price, codAvailable }),
+    })
+  }
+
+  async updateDeliveryZone(id: number, name: string, price: number, codAvailable: boolean): Promise<DeliveryZone> {
+    return this.request<DeliveryZone>(`/delivery-zones/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name, price, codAvailable }),
+    })
+  }
+
+  async deleteDeliveryZone(id: number): Promise<void> {
+    return this.request(`/delivery-zones/${id}`, {
+      method: 'DELETE',
+    })
+  }
+}
+
+export const api = new ApiClient()

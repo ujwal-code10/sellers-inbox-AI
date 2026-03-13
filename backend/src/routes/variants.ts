@@ -5,6 +5,33 @@ import pool from "../utils/db.js";
 const router = express.Router();
 
 /**
+ * Get variants for a product
+ * GET /api/products/:productId/variants
+ */
+router.get(
+  "/products/:productId/variants",
+  auth,
+  async (req: AuthRequest, res) => {
+    const { productId } = req.params;
+
+    try {
+      const result = await pool.query(
+        `SELECT id, product_id, color, size, available
+         FROM variants
+         WHERE product_id = $1
+         ORDER BY id DESC`,
+        [productId]
+      );
+
+      res.json(result.rows);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Server error" });
+    }
+  }
+);
+
+/**
  * Add variant to a product
  * POST /api/products/:productId/variants
  */

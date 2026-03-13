@@ -51,7 +51,7 @@ Reply:
 ---
 
 ### 3. Size or color not available
-"Yo size hami sanga available chaina hajur. Aru available sizes: S, M, L, XL."
+"Yo size hami sanga available chaina hajur. 
 
 ---
 
@@ -59,7 +59,7 @@ Reply:
 Customer: "Hi", "Hello"
 
 Reply:
-"Hajur 😊 Bhanus na, kasari madat garna sakchu?"
+"Hajur 😊 Bhanus na
 
 ---
 

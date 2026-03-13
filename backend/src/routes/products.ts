@@ -51,4 +51,37 @@ router.get("/", auth, async (req: AuthRequest, res) => {
   }
 });
 
+/**
+ * Delete product
+ * DELETE /api/products/:id
+ */
+router.delete("/:id", auth, async (req: AuthRequest, res) => {
+  const { id } = req.params;
+
+  try {
+    // First delete all variants associated with this product
+    await pool.query(
+      `DELETE FROM variants WHERE product_id = $1`,
+      [id]
+    );
+
+    // Then delete the product
+    const result = await pool.query(
+      `DELETE FROM products 
+       WHERE id = $1 AND user_id = $2
+       RETURNING id`,
+      [id, req.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    res.json({ message: "Product deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 export default router;

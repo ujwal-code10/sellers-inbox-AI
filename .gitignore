@@ -14,6 +14,7 @@ backend/dist/
 backend/build/
 mobile/build/
 mobile/.dart_tool/
+web/dist/
 
 # IDE
 .vscode/

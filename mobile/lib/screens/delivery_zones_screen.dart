@@ -141,18 +141,44 @@ class _DeliveryZonesScreenState extends State<DeliveryZonesScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Checkbox(
-                    value: codAvailable,
-                    onChanged: (value) {
-                      setDialogState(() {
-                        codAvailable = value ?? true;
-                      });
-                    },
+              InkWell(
+                onTap: () {
+                  setDialogState(() {
+                    codAvailable = !codAvailable;
+                  });
+                },
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: codAvailable,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          codAvailable = value ?? true;
+                        });
+                      },
+                    ),
+                    const Text('COD Available'),
+                  ],
+                ),
+              ),
+              CheckboxListTile(
+                value: codAvailable,
+                onChanged: (value) {
+                  setDialogState(() {
+                    codAvailable = value ?? true;
+                  });
+                },
+                activeColor: Colors.green,
+                title: Text(
+                  'COD Available',
+                  style: TextStyle(
+                    fontWeight:
+                        codAvailable ? FontWeight.bold : FontWeight.normal,
+                    color: codAvailable ? Colors.green[800] : Colors.black87,
                   ),
-                  const Text('COD Available'),
-                ],
+                ),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
               ),
             ],
           ),
@@ -248,18 +274,44 @@ class _DeliveryZonesScreenState extends State<DeliveryZonesScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Checkbox(
-                    value: codAvailable,
-                    onChanged: (value) {
-                      setDialogState(() {
-                        codAvailable = value ?? true;
-                      });
-                    },
+              InkWell(
+                onTap: () {
+                  setDialogState(() {
+                    codAvailable = !codAvailable;
+                  });
+                },
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: codAvailable,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          codAvailable = value ?? true;
+                        });
+                      },
+                    ),
+                    const Text('COD Available'),
+                  ],
+                ),
+              ),
+              CheckboxListTile(
+                value: codAvailable,
+                onChanged: (value) {
+                  setDialogState(() {
+                    codAvailable = value ?? true;
+                  });
+                },
+                activeColor: Colors.green,
+                title: Text(
+                  'COD Available',
+                  style: TextStyle(
+                    fontWeight:
+                        codAvailable ? FontWeight.bold : FontWeight.normal,
+                    color: codAvailable ? Colors.green[800] : Colors.black87,
                   ),
-                  const Text('COD Available'),
-                ],
+                ),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
               ),
             ],
           ),
