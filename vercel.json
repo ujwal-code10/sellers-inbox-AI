@@ -2,10 +2,14 @@
   "installCommand": "npm install && cd backend && npm install && cd ../web && npm install",
   "buildCommand": "cd backend && npm run build && cd ../web && npm run build",
   "outputDirectory": "web/dist",
+  "functions": {
+    "api/[...path].js": {
+      "includeFiles": "backend/dist/**"
+    }
+  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/[...path]" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
-
 
