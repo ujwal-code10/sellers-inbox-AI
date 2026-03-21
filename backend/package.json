@@ -1,6 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
+  "type": "module",
   "description": "",
   "keywords": [],
   "author": "",
@@ -8,6 +9,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
+    "start": "node dist/server.js",
     "vercel-build": "tsc"
   },
   "dependencies": {

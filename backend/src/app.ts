@@ -4,13 +4,13 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-import authRoutes from "./routes/auth";
+import authRoutes from "./routes/auth.js";
 import productRoutes from "./routes/products.js";
 import variantRoutes from "./routes/variants.js";
 import deliveryRoutes from "./routes/delivery.js";
 import aiRoutes from "./routes/ai.js";
 import pool from "./utils/db.js";
-
+import paymentRoutes from "./routes/payment.js";
 const app = express();
 
 // Middleware
@@ -21,6 +21,7 @@ app.use("/api/products", productRoutes);
 app.use("/api", variantRoutes);
 app.use("/api", deliveryRoutes);
 app.use("/api", aiRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // Debug endpoint - shows env var status and DB connection on Vercel
 app.get("/api/debug", async (_req, res) => {

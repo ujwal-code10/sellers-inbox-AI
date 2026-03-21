@@ -26,7 +26,7 @@ export async function handleIncomingMessage(event: IncomingMessage) {
     messageText,
     hasMedia,
     source,
-    productNames,
+    products: productNames.map(name => ({ name })),
   });
 
   // 2️⃣ Calculate confidence

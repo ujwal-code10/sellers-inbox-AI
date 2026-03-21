@@ -20,6 +20,8 @@ export interface Product {
   id: number
   name: string
   price: number
+  keywords?: string | null
+  notes?: string | null
 }
 
 export interface Variant {
@@ -103,10 +105,15 @@ class ApiClient {
     return this.request<Product[]>('/products')
   }
 
-  async createProduct(name: string, price: number): Promise<Product> {
+  async createProduct(
+    name: string,
+    price: number,
+    keywords?: string,
+    notes?: string
+  ): Promise<Product> {
     return this.request<Product>('/products', {
       method: 'POST',
-      body: JSON.stringify({ name, price }),
+      body: JSON.stringify({ name, price, keywords, notes }),
     })
   }
 
@@ -121,7 +128,12 @@ class ApiClient {
     return this.request<Variant[]>(`/products/${productId}/variants`)
   }
 
-  async createVariant(productId: number, color: string, size: string, available: boolean = true): Promise<Variant> {
+  async createVariant(
+    productId: number,
+    color: string,
+    size: string,
+    available: boolean = true
+  ): Promise<Variant> {
     return this.request<Variant>(`/products/${productId}/variants`, {
       method: 'POST',
       body: JSON.stringify({ color, size, available }),
@@ -140,14 +152,23 @@ class ApiClient {
     return this.request<DeliveryZone[]>('/delivery-zones')
   }
 
-  async createDeliveryZone(name: string, price: number, codAvailable: boolean = true): Promise<DeliveryZone> {
+  async createDeliveryZone(
+    name: string,
+    price: number,
+    codAvailable: boolean = true
+  ): Promise<DeliveryZone> {
     return this.request<DeliveryZone>('/delivery-zones', {
       method: 'POST',
       body: JSON.stringify({ name, price, codAvailable }),
     })
   }
 
-  async updateDeliveryZone(id: number, name: string, price: number, codAvailable: boolean): Promise<DeliveryZone> {
+  async updateDeliveryZone(
+    id: number,
+    name: string,
+    price: number,
+    codAvailable: boolean
+  ): Promise<DeliveryZone> {
     return this.request<DeliveryZone>(`/delivery-zones/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ name, price, codAvailable }),
@@ -157,6 +178,26 @@ class ApiClient {
   async deleteDeliveryZone(id: number): Promise<void> {
     return this.request(`/delivery-zones/${id}`, {
       method: 'DELETE',
+    })
+  }
+
+  // Payment endpoints
+  async getPlans(): Promise<any> {
+    return this.request('/payments/plans')
+  }
+
+  async initiateEsewa(billing: 'monthly' | 'yearly'): Promise<any> {
+    localStorage.setItem('esewa_billing', billing)
+    return this.request('/payments/esewa/initiate', {
+      method: 'POST',
+      body: JSON.stringify({ billing }),
+    })
+  }
+
+  async verifyEsewa(encodedData: string, billing: string): Promise<any> {
+    return this.request('/payments/esewa/verify', {
+      method: 'POST',
+      body: JSON.stringify({ encodedData, billing }),
     })
   }
 }

@@ -15,6 +15,19 @@ router.get(
     const { productId } = req.params;
 
     try {
+      // Verify product belongs to this seller
+      const ownerCheck = await pool.query(
+        `SELECT id FROM products
+         WHERE id = $1 AND user_id = $2`,
+        [productId, req.userId]
+      );
+
+      if (ownerCheck.rows.length === 0) {
+        return res.status(404).json({
+          error: "Product not found or access denied"
+        });
+      }
+
       const result = await pool.query(
         `SELECT id, product_id, color, size, available
          FROM variants
@@ -47,6 +60,19 @@ router.post(
     }
 
     try {
+      // Verify product belongs to this seller before adding variant
+      const ownerCheck = await pool.query(
+        `SELECT id FROM products
+         WHERE id = $1 AND user_id = $2`,
+        [productId, req.userId]
+      );
+
+      if (ownerCheck.rows.length === 0) {
+        return res.status(404).json({
+          error: "Product not found or access denied"
+        });
+      }
+
       const result = await pool.query(
         `INSERT INTO variants (product_id, color, size, available)
          VALUES ($1, $2, $3, $4)
@@ -80,16 +106,23 @@ router.patch(
     }
 
     try {
+      // JOIN through products to verify this variant
+      // belongs to the logged-in seller
       const result = await pool.query(
-        `UPDATE variants
+        `UPDATE variants v
          SET available = $1
-         WHERE id = $2
-         RETURNING id, available`,
-        [available, variantId]
+         FROM products p
+         WHERE v.id = $2
+           AND v.product_id = p.id
+           AND p.user_id = $3
+         RETURNING v.id, v.available`,
+        [available, variantId, req.userId]
       );
 
       if (result.rows.length === 0) {
-        return res.status(404).json({ error: "Variant not found" });
+        return res.status(404).json({
+          error: "Variant not found or access denied"
+        });
       }
 
       res.json(result.rows[0]);

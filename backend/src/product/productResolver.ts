@@ -1,33 +1,44 @@
 // productResolver.ts
 
-export interface ProductContextInput {
-  messageText?: string;
-  hasMedia?: boolean; // image / video / screenshot
-  source?: "STORY_REPLY" | "REEL_FORWARD" | "DM";
-  productNames?: string[]; // List of seller's product names from DB
+interface ProductContextInput {
+  messageText: string;
+  hasMedia: boolean;
+  source: "STORY_REPLY" | "REEL_FORWARD" | "DM";
+  products?: { name: string; keywords?: string | null }[];
 }
 
-export interface ProductContextResult {
+interface ProductContextResult {
   productKnown: boolean;
   matchedProduct?: string;
   reason: string;
 }
 
-/**
- * Check if any product name is mentioned in the message.
- * Uses case-insensitive partial matching.
- */
 function findProductInMessage(
   messageText: string,
-  productNames: string[]
+  products: { name: string; keywords?: string | null }[]
 ): string | null {
-  const lowerMessage = messageText.toLowerCase();
+  const msgLower = messageText.toLowerCase();
 
-  for (const productName of productNames) {
-    const lowerProductName = productName.toLowerCase();
-    // Check if product name appears in message
-    if (lowerMessage.includes(lowerProductName)) {
-      return productName;
+  for (const product of products) {
+    const nameLower = product.name.toLowerCase();
+
+    // Check product name first — strongest signal
+    if (msgLower.includes(nameLower)) {
+      return product.name;
+    }
+
+    // Check keywords if provided
+    if (product.keywords) {
+      const keywordList = product.keywords
+        .split(",")
+        .map(k => k.trim().toLowerCase())
+        .filter(k => k.length > 1);
+
+      for (const keyword of keywordList) {
+        if (msgLower.includes(keyword)) {
+          return product.name;
+        }
+      }
     }
   }
 
@@ -37,9 +48,9 @@ function findProductInMessage(
 export function resolveProductContext(
   input: ProductContextInput
 ): ProductContextResult {
-  const { messageText, hasMedia, source, productNames = [] } = input;
+  const { messageText, hasMedia, source, products = [] } = input;
 
-  // Rule 1: Reply to story → product known (story contains product context)
+  // Rule 1: Story reply → product known (future Meta API)
   if (source === "STORY_REPLY") {
     return {
       productKnown: true,
@@ -47,7 +58,7 @@ export function resolveProductContext(
     };
   }
 
-  // Rule 2: Forwarded reel → product known (reel contains product context)
+  // Rule 2: Forwarded reel → product known (future Meta API)
   if (source === "REEL_FORWARD") {
     return {
       productKnown: true,
@@ -55,7 +66,7 @@ export function resolveProductContext(
     };
   }
 
-  // Rule 3: Media sent → assume product context (screenshot/image of product)
+  // Rule 3: Media sent → assume product context
   if (hasMedia) {
     return {
       productKnown: true,
@@ -63,23 +74,21 @@ export function resolveProductContext(
     };
   }
 
-  // Rule 4: Check if a SPECIFIC product name is mentioned in the message
-  // This is the MVP-critical rule: NO GUESSING, NO DEFAULTS
-  if (messageText && productNames.length > 0) {
-    const matchedProduct = findProductInMessage(messageText, productNames);
+  // Rule 4: Match product name OR keywords in message
+  if (messageText && products.length > 0) {
+    const matchedProduct = findProductInMessage(messageText, products);
     if (matchedProduct) {
       return {
         productKnown: true,
         matchedProduct,
-        reason: `Product "${matchedProduct}" mentioned in text`,
+        reason: `Product "${matchedProduct}" matched in message`,
       };
     }
   }
 
-  // DEFAULT: No product context detected → productKnown = false
-  // This ensures vague messages like "price please" trigger ASK
+  // Default: no product identified
   return {
     productKnown: false,
-    reason: "No product name detected in message",
+    reason: "No product name or keyword detected in message",
   };
 }

@@ -17,14 +17,11 @@ router.post("/delivery-zones", auth, async (req: AuthRequest, res) => {
 
   try {
     const result = await pool.query(
-      `
-      INSERT INTO delivery_zones (user_id, name, price, cod_available)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, user_id, name, price, cod_available, created_at
-      `,
+      `INSERT INTO delivery_zones (user_id, name, price, cod_available)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, user_id, name, price, cod_available, created_at`,
       [req.userId, name, price, codAvailable ?? true]
     );
-
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -39,15 +36,12 @@ router.post("/delivery-zones", auth, async (req: AuthRequest, res) => {
 router.get("/delivery-zones", auth, async (req: AuthRequest, res) => {
   try {
     const result = await pool.query(
-      `
-      SELECT id, name, price, cod_available, created_at
-      FROM delivery_zones
-      WHERE user_id = $1
-      ORDER BY created_at ASC
-      `,
+      `SELECT id, name, price, cod_available, created_at
+       FROM delivery_zones
+       WHERE user_id = $1
+       ORDER BY created_at ASC`,
       [req.userId]
     );
-
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -88,12 +82,10 @@ router.patch("/delivery-zones/:id", auth, async (req: AuthRequest, res) => {
     values.push(id, req.userId);
 
     const result = await pool.query(
-      `
-      UPDATE delivery_zones
-      SET ${updates.join(", ")}
-      WHERE id = $${paramCount} AND user_id = $${paramCount + 1}
-      RETURNING id, name, price, cod_available, created_at
-      `,
+      `UPDATE delivery_zones
+       SET ${updates.join(", ")}
+       WHERE id = $${paramCount} AND user_id = $${paramCount + 1}
+       RETURNING id, name, price, cod_available, created_at`,
       values
     );
 
@@ -117,11 +109,9 @@ router.delete("/delivery-zones/:id", auth, async (req: AuthRequest, res) => {
 
   try {
     const result = await pool.query(
-      `
-      DELETE FROM delivery_zones
-      WHERE id = $1 AND user_id = $2
-      RETURNING id
-      `,
+      `DELETE FROM delivery_zones
+       WHERE id = $1 AND user_id = $2
+       RETURNING id`,
       [id, req.userId]
     );
 
@@ -130,70 +120,6 @@ router.delete("/delivery-zones/:id", auth, async (req: AuthRequest, res) => {
     }
 
     res.json({ message: "Delivery zone deleted" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/**
- * Create or update delivery settings
- * PUT /api/delivery-settings
- */
-router.put("/delivery-settings", auth, async (req: AuthRequest, res) => {
-  const { withinCityPrice, outsideCityPrice, codAvailable } = req.body;
-
-  if (
-    typeof withinCityPrice !== "number" ||
-    typeof outsideCityPrice !== "number"
-  ) {
-    return res
-      .status(400)
-      .json({ error: "Delivery prices are required" });
-  }
-
-  try {
-    const result = await pool.query(
-      `
-      INSERT INTO delivery_settings (user_id, within_city_price, outside_city_price, cod_available)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (user_id)
-      DO UPDATE SET
-        within_city_price = EXCLUDED.within_city_price,
-        outside_city_price = EXCLUDED.outside_city_price,
-        cod_available = EXCLUDED.cod_available
-      RETURNING within_city_price, outside_city_price, cod_available
-      `,
-      [req.userId, withinCityPrice, outsideCityPrice, codAvailable ?? true]
-    );
-
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/**
- * Get delivery settings
- * GET /api/delivery-settings
- */
-router.get("/delivery-settings", auth, async (req: AuthRequest, res) => {
-  try {
-    const result = await pool.query(
-      `
-      SELECT within_city_price, outside_city_price, cod_available
-      FROM delivery_settings
-      WHERE user_id = $1
-      `,
-      [req.userId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.json(null);
-    }
-
-    res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });

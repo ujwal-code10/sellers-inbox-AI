@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
 import Products from './Products'
@@ -19,12 +20,15 @@ type Tab = 'reply' | 'products' | 'delivery'
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<Tab>('reply')
   const [customerMessage, setCustomerMessage] = useState('')
   const [result, setResult] = useState<ReplyResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+  const [showPaywall, setShowPaywall] = useState(false)
+  const [paywallReason, setPaywallReason] = useState<'replies' | 'products'>('replies')
 
   const handleGenerate = async () => {
     if (!customerMessage.trim()) {
@@ -39,7 +43,18 @@ export default function Dashboard() {
     try {
       const response = await api.suggestReply(customerMessage.trim())
       setResult(response)
-    } catch (err) {
+    } catch (err: any) {
+      // Check if this is a paywall error
+      if (err.message === 'Daily limit reached') {
+        setPaywallReason('replies')
+        setShowPaywall(true)
+        return
+      }
+      if (err.message === 'Product limit reached') {
+        setPaywallReason('products')
+        setShowPaywall(true)
+        return
+      }
       setError(err instanceof Error ? err.message : 'Failed to generate reply')
     } finally {
       setLoading(false)
@@ -52,7 +67,6 @@ export default function Dashboard() {
       setCopiedIndex(index)
       setTimeout(() => setCopiedIndex(null), 2000)
     } catch {
-      // Fallback for older browsers
       const textArea = document.createElement('textarea')
       textArea.value = text
       document.body.appendChild(textArea)
@@ -72,10 +86,78 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard">
+
+      {/* ── Paywall Modal ── */}
+      {showPaywall && (
+        <div
+          className="modal-overlay"
+          onClick={() => setShowPaywall(false)}
+        >
+          <div
+            className="modal"
+            onClick={e => e.stopPropagation()}
+            style={{ textAlign: 'center', padding: '2rem' }}
+          >
+            <div style={{ fontSize: 40, marginBottom: 12 }}>⚡</div>
+            <h3 style={{ marginBottom: 8 }}>
+              {paywallReason === 'replies'
+                ? "You've used all 20 free replies today"
+                : "You've reached the 5 product limit"
+              }
+            </h3>
+            <p style={{ color: '#666', fontSize: 14, marginBottom: 24 }}>
+              {paywallReason === 'replies'
+                ? 'Upgrade to Pro for unlimited replies every day'
+                : 'Upgrade to Pro for unlimited products'
+              }
+            </p>
+            <button
+              onClick={() => navigate('/upgrade')}
+              style={{
+                width: '100%', padding: '12px 0',
+                borderRadius: 10, border: 'none',
+                background: '#1D9E75', color: '#fff',
+                fontWeight: 700, fontSize: 15,
+                cursor: 'pointer', marginBottom: 10
+              }}
+            >
+              Upgrade to Pro — Rs. 299/month
+            </button>
+            <button
+              onClick={() => setShowPaywall(false)}
+              style={{
+                width: '100%', padding: '10px 0',
+                borderRadius: 10, border: '0.5px solid #e5e5e5',
+                background: 'transparent', color: '#888',
+                fontSize: 14, cursor: 'pointer'
+              }}
+            >
+              Maybe later
+            </button>
+          </div>
+        </div>
+      )}
+
       <header className="dashboard-header">
         <h1>Seller Inbox AI</h1>
         <div className="header-right">
           <span className="user-name">{user?.name}</span>
+          <button
+            onClick={() => navigate('/upgrade')}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 20,
+              border: '1.5px solid #1D9E75',
+              background: 'transparent',
+              color: '#1D9E75',
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: 'pointer',
+              marginRight: 8
+            }}
+          >
+            ⚡ Upgrade
+          </button>
           <button onClick={logout} className="btn-logout">
             Logout
           </button>
@@ -84,23 +166,23 @@ export default function Dashboard() {
 
       {/* Tab Navigation */}
       <nav className="tab-nav">
-        <button 
+        <button
           className={`tab-btn ${activeTab === 'reply' ? 'active' : ''}`}
           onClick={() => setActiveTab('reply')}
         >
           💬 Reply
         </button>
-        <button 
+        <button
           className={`tab-btn ${activeTab === 'products' ? 'active' : ''}`}
           onClick={() => setActiveTab('products')}
         >
-          📦 Products
+           Products
         </button>
-        <button 
+        <button
           className={`tab-btn ${activeTab === 'delivery' ? 'active' : ''}`}
           onClick={() => setActiveTab('delivery')}
         >
-          🚚 Delivery
+           Delivery
         </button>
       </nav>
 
@@ -108,7 +190,6 @@ export default function Dashboard() {
         {/* Reply Tab */}
         {activeTab === 'reply' && (
           <div className="reply-generator">
-            {/* Input Section */}
             <div className="input-section">
               <label htmlFor="customerMessage">Customer Message</label>
               <textarea
@@ -118,10 +199,9 @@ export default function Dashboard() {
                 placeholder="Paste customer message here...&#10;&#10;Example: Blue hoodie cha? Price kati ho?"
                 rows={4}
               />
-              
               <div className="button-row">
-                <button 
-                  onClick={handleGenerate} 
+                <button
+                  onClick={handleGenerate}
                   className="btn-generate"
                   disabled={loading}
                 >
@@ -135,18 +215,16 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Error */}
             {error && <div className="error-message">{error}</div>}
 
-            {/* Results Section */}
             {result && (
               <div className="results-section">
-                {/* Action Badge */}
                 <div className={`action-badge ${result.decision.action.toLowerCase()}`}>
-                  {result.decision.action === 'ASK' ? '❓ Clarification Needed' : '✅ Reply Suggestions'}
+                  {result.decision.action === 'ASK'
+                    ? '❓ Clarification Needed'
+                    : '✅ Reply Suggestions'
+                  }
                 </div>
-
-                {/* Suggestions */}
                 <div className="suggestions-list">
                   {result.suggestions.map((suggestion, index) => (
                     <div key={index} className="suggestion-card">
@@ -160,8 +238,6 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
-
-                {/* Debug Info */}
                 {result.decision.action === 'REPLY' && result.decision.matchedProduct && (
                   <div className="debug-info">
                     <span>Product: {result.decision.matchedProduct}</span>
@@ -173,10 +249,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Products Tab */}
         {activeTab === 'products' && <Products />}
-
-        {/* Delivery Tab */}
         {activeTab === 'delivery' && <DeliveryZones />}
       </main>
     </div>
