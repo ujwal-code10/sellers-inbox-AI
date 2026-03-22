@@ -1,6 +1,6 @@
 {
   "installCommand": "npm install && cd backend && npm install && cd ../web && npm install",
-  "buildCommand": "cd backend && npm run build && cd ../web && npm run build",
+  "buildCommand": "cd backend && npm run build && cd ../web && npm run build && cp public/landing.html dist/landing.html",
   "outputDirectory": "web/dist",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/[...path]" },
