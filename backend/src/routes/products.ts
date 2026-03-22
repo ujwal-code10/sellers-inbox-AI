@@ -16,6 +16,25 @@ router.post("/", auth, checkProductLimit, async (req: AuthRequest, res) => {
     return res.status(400).json({ error: "Name and price are required" });
   }
 
+  // Validate product name
+  if (typeof name !== 'string' || name.trim().length === 0 || name.length > 255) {
+    return res.status(400).json({ error: "Product name must be 1-255 characters" });
+  }
+
+  // Validate price (positive number, reasonable range)
+  if (typeof price !== 'number' || price <= 0 || price > 10000000 || !isFinite(price)) {
+    return res.status(400).json({ error: "Price must be a positive number between 1 and 10,000,000" });
+  }
+
+  // Validate optional fields
+  if (keywords && (typeof keywords !== 'string' || keywords.length > 500)) {
+    return res.status(400).json({ error: "Keywords too long (max 500 characters)" });
+  }
+
+  if (notes && (typeof notes !== 'string' || notes.length > 2000)) {
+    return res.status(400).json({ error: "Notes too long (max 2000 characters)" });
+  }
+
   try {
     const result = await pool.query(
       `INSERT INTO products (user_id, name, price, keywords, notes)
@@ -60,6 +79,25 @@ router.patch("/:id", auth, async (req: AuthRequest, res) => {
   const { id } = req.params;
   const { name, price, keywords, notes } = req.body;
 
+  // Validate name if provided
+  if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0 || name.length > 255)) {
+    return res.status(400).json({ error: "Product name must be 1-255 characters" });
+  }
+
+  // Validate price if provided
+  if (price !== undefined && (typeof price !== 'number' || price <= 0 || price > 10000000 || !isFinite(price))) {
+    return res.status(400).json({ error: "Price must be a positive number between 1 and 10,000,000" });
+  }
+
+  // Validate optional fields if provided
+  if (keywords !== undefined && keywords !== null && (typeof keywords !== 'string' || keywords.length > 500)) {
+    return res.status(400).json({ error: "Keywords too long (max 500 characters)" });
+  }
+
+  if (notes !== undefined && notes !== null && (typeof notes !== 'string' || notes.length > 2000)) {
+    return res.status(400).json({ error: "Notes too long (max 2000 characters)" });
+  }
+
   try {
     const result = await pool.query(
       `UPDATE products
@@ -91,11 +129,7 @@ router.delete("/:id", auth, async (req: AuthRequest, res) => {
   const { id } = req.params;
 
   try {
-    await pool.query(
-      `DELETE FROM variants WHERE product_id = $1`,
-      [id]
-    );
-
+    // Variants are automatically deleted via ON DELETE CASCADE in the database schema
     const result = await pool.query(
       `DELETE FROM products
        WHERE id = $1 AND user_id = $2

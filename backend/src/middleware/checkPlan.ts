@@ -53,7 +53,10 @@ export async function checkReplyLimit(
     next();
   } catch (err) {
     console.error("checkReplyLimit error:", err);
-    next();
+    // CRITICAL: Deny access on error instead of allowing bypass
+    return res.status(503).json({
+      error: "Service temporarily unavailable. Please try again."
+    });
   }
 }
 
@@ -112,6 +115,9 @@ export async function checkProductLimit(
     next();
   } catch (err) {
     console.error("checkProductLimit error:", err);
-    next();
+    // CRITICAL: Deny access on error instead of allowing bypass
+    return res.status(503).json({
+      error: "Service temporarily unavailable. Please try again."
+    });
   }
 }

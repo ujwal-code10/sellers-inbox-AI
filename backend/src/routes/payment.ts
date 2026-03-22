@@ -7,8 +7,8 @@ const router = express.Router();
 
 // eSewa config
 const ESEWA_MERCHANT_CODE = process.env.ESEWA_MERCHANT_CODE || "EPAYTEST";
-const ESEWA_SECRET_KEY =
-  process.env.ESEWA_SECRET_KEY || "8gBm/:&EnhH.1/q";
+// CRITICAL: No fallback for production - must be set in environment
+const ESEWA_SECRET_KEY = process.env.ESEWA_SECRET_KEY!;
 const ESEWA_VERIFY_URL =
   process.env.NODE_ENV === "production"
     ? "https://epay.esewa.com.np/api/epay/transaction/status/"
@@ -97,7 +97,7 @@ router.post("/esewa/initiate", auth, async (req: AuthRequest, res) => {
       ? PLAN_PRICES.pro_yearly
       : PLAN_PRICES.pro_monthly;
 
-  const transactionUuid = `SIA-${req.userId}-${Date.now()}`;
+  const transactionUuid = `SIA-${req.userId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const productCode = ESEWA_MERCHANT_CODE;
 
   // eSewa v2 signature: total_amount,transaction_uuid,product_code
@@ -148,6 +148,18 @@ router.post("/esewa/verify", auth, async (req: AuthRequest, res) => {
       signature: esewaSignature,
     } = decoded;
 
+    // CRITICAL: Validate payment amount matches expected plan price
+    const expectedAmount = billing === 'yearly'
+      ? PLAN_PRICES.pro_yearly
+      : PLAN_PRICES.pro_monthly;
+
+    if (parseFloat(total_amount) !== expectedAmount) {
+      console.error(`Payment amount mismatch: expected ${expectedAmount}, got ${total_amount}`);
+      return res.status(400).json({
+        error: "Payment amount mismatch"
+      });
+    }
+
     // Verify signature from eSewa
     const signedFields = signed_field_names.split(",");
     const signatureMessage = signedFields
@@ -175,6 +187,17 @@ router.post("/esewa/verify", auth, async (req: AuthRequest, res) => {
 
     if (verifyData.status !== "COMPLETE") {
       return res.status(400).json({ error: "Payment verification failed" });
+    }
+
+    // CRITICAL: Prevent duplicate payment processing (replay attack)
+    const existingPayment = await pool.query(
+      `SELECT id FROM subscriptions WHERE payment_ref = $1`,
+      [transaction_code]
+    );
+
+    if (existingPayment.rows.length > 0) {
+      console.error(`Duplicate payment attempt with transaction_code: ${transaction_code}`);
+      return res.status(400).json({ error: "Payment already processed" });
     }
 
     // Calculate expiry

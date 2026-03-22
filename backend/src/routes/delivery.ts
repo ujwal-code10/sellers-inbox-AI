@@ -15,6 +15,21 @@ router.post("/delivery-zones", auth, async (req: AuthRequest, res) => {
     return res.status(400).json({ error: "name and price are required" });
   }
 
+  // Validate zone name
+  if (typeof name !== 'string' || name.trim().length === 0 || name.length > 255) {
+    return res.status(400).json({ error: "Zone name must be 1-255 characters" });
+  }
+
+  // Validate price (must be non-negative, finite, and reasonable)
+  if (price < 0 || price > 10000 || !isFinite(price)) {
+    return res.status(400).json({ error: "Price must be between 0 and 10,000" });
+  }
+
+  // Validate codAvailable if provided
+  if (codAvailable !== undefined && typeof codAvailable !== 'boolean') {
+    return res.status(400).json({ error: "codAvailable must be true or false" });
+  }
+
   try {
     const result = await pool.query(
       `INSERT INTO delivery_zones (user_id, name, price, cod_available)
@@ -56,6 +71,21 @@ router.get("/delivery-zones", auth, async (req: AuthRequest, res) => {
 router.patch("/delivery-zones/:id", auth, async (req: AuthRequest, res) => {
   const { id } = req.params;
   const { name, price, codAvailable } = req.body;
+
+  // Validate name if provided
+  if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0 || name.length > 255)) {
+    return res.status(400).json({ error: "Zone name must be 1-255 characters" });
+  }
+
+  // Validate price if provided
+  if (price !== undefined && (typeof price !== 'number' || price < 0 || price > 10000 || !isFinite(price))) {
+    return res.status(400).json({ error: "Price must be between 0 and 10,000" });
+  }
+
+  // Validate codAvailable if provided
+  if (codAvailable !== undefined && typeof codAvailable !== 'boolean') {
+    return res.status(400).json({ error: "codAvailable must be true or false" });
+  }
 
   try {
     const updates: string[] = [];

@@ -32,33 +32,32 @@
 | **Auth** | Custom JWT — `jsonwebtoken` + `bcryptjs` | 7-day tokens |
 | **AI** | Groq SDK — `groq-sdk` package | Model: `llama-3.3-70b-versatile` |
 | **Frontend Hosting** | Vercel | Auto-deploy from GitHub |
-| **Backend Hosting** | Railway | $5/month, no spin-down |
+| **Backend Hosting** | Vercel serverless | Included in free tier |
 | **DB Hosting** | Neon PostgreSQL | Managed, serverless PostgreSQL |
 
 ### Environment Variables
 
 | Variable | Used In | Notes |
 |---|---|---|
-| `DATABASE_URL` | Backend (Railway) | Neon PostgreSQL connection string |
-| `JWT_SECRET` | Backend (Railway) | Token signing secret |
-| `GROQ_API_KEY` | Backend (Railway) | Groq AI API key |
-| `ESEWA_MERCHANT_CODE` | Backend (Railway) | `EPAYTEST` sandbox / real code production |
-| `ESEWA_SECRET_KEY` | Backend (Railway) | eSewa HMAC signing secret |
-| `FRONTEND_URL` | Backend (Railway) | Vercel frontend URL for eSewa redirect |
-| `NODE_ENV` | Backend (Railway) | `production` |
-| `VITE_API_URL` | Frontend (Vercel) | Railway backend URL |
+| `DATABASE_URL` | Backend (Vercel serverless) | Neon PostgreSQL connection string |
+| `JWT_SECRET` | Backend (Vercel serverless) | Token signing secret |
+| `GROQ_API_KEY` | Backend (Vercel serverless) | Groq AI API key |
+| `ESEWA_MERCHANT_CODE` | Backend (Vercel serverless) | `EPAYTEST` sandbox / real code production |
+| `ESEWA_SECRET_KEY` | Backend (Vercel serverless) | eSewa HMAC signing secret |
+| `FRONTEND_URL` | Backend (Vercel serverless) | Vercel frontend URL for eSewa redirect |
+| `NODE_ENV` | Backend (Vercel serverless) | `production` |
 
 ### Environment Strategy
 
 ```
 Local:      Docker PostgreSQL + Vite dev server
-Production: Vercel (frontend) + Railway (backend) + Neon (database)
+Production: Vercel (frontend) + Vercel serverless (backend) + Neon (database)
 ```
 
 | Environment | Backend | Frontend | DB |
 |---|---|---|---|
 | **Local** | `http://localhost:4000` | `http://localhost:3000` | Docker PostgreSQL |
-| **Production** | Railway URL | Vercel URL | Neon PostgreSQL |
+| **Production** | Vercel serverless URL | Vercel URL | Neon PostgreSQL |
 
 ---
 
@@ -228,7 +227,7 @@ Smart Reply Assistant helps small Nepali Instagram and WhatsApp sellers generate
                │ HTTPS
                ▼
 ┌─────────────────────────────────┐
-│  Railway (Backend)              │
+│  Vercel serverless (Backend)    │
 │  Node.js + Express              │
 │  Port 4000 (local)              │
 │                                 │
@@ -578,23 +577,20 @@ cd web && npm run dev      # :3000
 | Service | Platform | Status |
 |---|---|---|
 | Frontend | Vercel | ✅ Deployed |
-| Backend | Railway | ⏳ In progress |
+| Backend | Vercel serverless | ✅ Working |
 | Database | Neon PostgreSQL | ✅ Live |
 
-### 12.3 Railway Backend Setup
-```
-Root directory: backend
-Build command:  npm run build
-Start command:  npm start
-Port:           4000
-```
+### 12.3 Vercel Backend Setup
+- Entry point: api/[...path].js at project root
+- Imports: backend/dist/app.js after build
+- Build: cd backend && npm run build (via vercel.json)
+- Routes: all /api/* requests handled by serverless function
 
 ### 12.4 Vercel Frontend Setup
 ```
 Root directory:   web
 Build command:    npm run build
 Output:           dist
-Env var:          VITE_API_URL = https://your-backend.railway.app
 ```
 
 ### 12.5 package.json Scripts
@@ -630,7 +626,7 @@ Sentry, Winston, PostHog
 
 | Users (MAU) | Strategy |
 |---|---|
-| 0–1,000 | Railway $5/month + Neon free |
+| 0–1,000 | Vercel free tier + Neon free |
 | 1,000–10,000 | Upgrade Neon + Redis rate limiting |
 | 10,000–50,000 | Read replica |
 | 50,000+ | Kubernetes, sharding |
@@ -684,5 +680,5 @@ Rules:
 10. **Neon needs SSL** — `ssl: { rejectUnauthorized: false }`
 11. **Payment built** — subscriptions + usage_daily + checkPlan
 12. **Paywall** — `{ error: "Daily limit reached", upgrade: true }`
-13. **Frontend = Vercel, Backend = Railway, DB = Neon** — never mix these up
+13. **Frontend = Vercel, Backend = Vercel serverless, DB = Neon** — never mix these up
 14. **Route file is `payment.ts`** — no 's' at the end

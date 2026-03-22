@@ -4,6 +4,27 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// Validate required environment variables at startup
+const requiredEnvVars = ['JWT_SECRET', 'GROQ_API_KEY', 'DATABASE_URL'];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.error(`FATAL ERROR: Missing required environment variables: ${missingEnvVars.join(', ')}`);
+  console.error('Please set these in your .env file or environment configuration');
+  process.exit(1);
+}
+
+// Validate JWT_SECRET length (security requirement)
+if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
+  console.error('FATAL ERROR: JWT_SECRET must be at least 32 characters long');
+  process.exit(1);
+}
+
+// Warn if eSewa secret is missing (payment will fail but app can start)
+if (!process.env.ESEWA_SECRET_KEY && process.env.NODE_ENV === 'production') {
+  console.error('WARNING: ESEWA_SECRET_KEY not set. Payments will fail.');
+}
+
 import authRoutes from "./routes/auth";
 import productRoutes from "./routes/products.js";
 import variantRoutes from "./routes/variants.js";

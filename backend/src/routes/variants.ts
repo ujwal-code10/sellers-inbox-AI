@@ -59,6 +59,21 @@ router.post(
       return res.status(400).json({ error: "Color and size are required" });
     }
 
+    // Validate color input
+    if (typeof color !== 'string' || color.trim().length === 0 || color.length > 50) {
+      return res.status(400).json({ error: "Color must be 1-50 characters" });
+    }
+
+    // Validate size input
+    if (typeof size !== 'string' || size.trim().length === 0 || size.length > 20) {
+      return res.status(400).json({ error: "Size must be 1-20 characters" });
+    }
+
+    // Validate available if provided
+    if (available !== undefined && typeof available !== 'boolean') {
+      return res.status(400).json({ error: "available must be true or false" });
+    }
+
     try {
       // Verify product belongs to this seller before adding variant
       const ownerCheck = await pool.query(

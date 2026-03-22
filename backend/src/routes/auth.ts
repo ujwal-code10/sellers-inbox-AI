@@ -3,8 +3,16 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pool from "../utils/db.js";
+import rateLimit from "express-rate-limit";
 
-
+// Rate limiter for login attempts (brute force protection)
+const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 login attempts per 15 minutes per IP
+  message: { error: "Too many login attempts. Please try again in 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const router = express.Router();
 
@@ -16,6 +24,26 @@ router.post("/signup", async (req, res) => {
 
   if (!name || !email || !password) {
     return res.status(400).json({ error: "All fields required" });
+  }
+
+  // Validate name
+  if (typeof name !== 'string' || name.trim().length === 0 || name.length > 100) {
+    return res.status(400).json({ error: "Name must be 1-100 characters" });
+  }
+
+  // Validate email format and length
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email) || email.length > 255) {
+    return res.status(400).json({ error: "Invalid email address" });
+  }
+
+  // Validate password length
+  if (password.length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters" });
+  }
+
+  if (password.length > 128) {
+    return res.status(400).json({ error: "Password is too long (max 128 characters)" });
   }
 
   try {
@@ -40,11 +68,12 @@ router.post("/signup", async (req, res) => {
       return res.status(400).json({ error: "Email already exists" });
     }
     console.error("Signup error:", err);
-    res.status(500).json({ error: "Server error", details: err?.message || String(err) });
+    // CRITICAL: Don't expose internal error details to client
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", loginRateLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -84,7 +113,8 @@ router.post("/login", async (req, res) => {
     }); 
   } catch (err: any) {
     console.error("Login error:", err);
-    res.status(500).json({ error: "Server error", details: err?.message || String(err) });
+    // CRITICAL: Don't expose internal error details to client
+    res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -102,7 +132,8 @@ router.get("/me", auth, async (req: AuthRequest, res) => {
     res.json({ user: result.rows[0] });
   } catch (err: any) {
     console.error("Me error:", err);
-    res.status(500).json({ error: "Server error", details: err?.message || String(err) });
+    // CRITICAL: Don't expose internal error details to client
+    res.status(500).json({ error: "Server error" });
   }
 });
 

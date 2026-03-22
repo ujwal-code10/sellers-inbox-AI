@@ -54,6 +54,16 @@ router.post("/ai/suggest-reply", auth, checkReplyLimit, async (req: AuthRequest,
     return res.status(400).json({ error: "customerMessage required" });
   }
 
+  // Validate message length to prevent AI credit waste
+  if (typeof customerMessage !== 'string' || customerMessage.length > 2000) {
+    return res.status(400).json({ error: "customerMessage must be 1-2000 characters" });
+  }
+
+  // Validate tone if provided
+  if (tone && !['friendly', 'professional', 'persuasive'].includes(tone.toLowerCase())) {
+    return res.status(400).json({ error: "tone must be friendly, professional, or persuasive" });
+  }
+
   try {
     const productsRes = await pool.query(
       `SELECT id, name, price, keywords, notes FROM products WHERE user_id = $1`,
@@ -203,19 +213,17 @@ ${deliveryContext}
       },
     });
   } catch (err: any) {
-    console.error(err);
+    console.error("AI suggest-reply error:", err);
 
     if (err?.status === 429) {
       return res.status(503).json({
-        error: "AI service temporarily unavailable. Please try again later.",
-        details: "Groq API rate limit exceeded. Try again in a moment.",
+        error: "AI service temporarily unavailable. Please try again later."
       });
     }
 
     if (err?.status === 401) {
       return res.status(503).json({
-        error: "AI service configuration error.",
-        details: "Invalid Groq API key.",
+        error: "AI service configuration error. Please contact support."
       });
     }
 
