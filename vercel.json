@@ -9,7 +9,7 @@
     { "source": "/dashboard", "destination": "/index.html" },
     { "source": "/upgrade", "destination": "/index.html" },
     { "source": "/payment/(.*)", "destination": "/index.html" },
-    { "source": "/(.*)", "destination": "/Landing.html" }
+    { "source": "/(.*)", "destination": "/landing.html" }
   ]
 }
 
