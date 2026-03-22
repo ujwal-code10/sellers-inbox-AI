@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && cp public/landing.html dist/landing.html",
+    "build": "tsc -b && vite build && node -e \"const fs = require('fs'); try { fs.copyFileSync('public/landing.html', 'dist/landing.html'); console.log('✓ landing.html copied to dist/'); } catch (err) { console.error('✗ Failed to copy landing.html:', err.message); process.exit(1); }\"",
     "preview": "vite preview"
   },
   "dependencies": {
