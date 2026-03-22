@@ -4,7 +4,13 @@
   "outputDirectory": "web/dist",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/[...path]" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/login", "destination": "/index.html" },
+    { "source": "/signup", "destination": "/index.html" },
+    { "source": "/dashboard", "destination": "/index.html" },
+    { "source": "/upgrade", "destination": "/index.html" },
+    { "source": "/payment/(.*)", "destination": "/index.html" },
+    { "source": "/(.*)", "destination": "/landing.html" }
   ]
 }
+
 
