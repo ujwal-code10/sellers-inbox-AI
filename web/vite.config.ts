@@ -3,7 +3,13 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  publicDir: 'public', // Explicitly set public directory
+  build: {
+    rollupOptions: {
+      input: {
+        app: 'index.html'
+      }
+    }
+  },
   server: {
     port: 3000,
     proxy: {
@@ -12,9 +18,5 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
-  },
-  build: {
-    outDir: 'dist',
-    emptyOutDir: true,
   },
 })

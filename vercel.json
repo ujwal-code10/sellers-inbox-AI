@@ -1,17 +1,15 @@
 {
   "installCommand": "npm install && cd backend && npm install && cd ../web && npm install",
-  "buildCommand": "cd backend && npm run build && cd ../web && npm run build && cp public/landing.html dist/landing.html",
+  "buildCommand": "cd backend && npm run build && cd ../web && npm run build",
   "outputDirectory": "web/dist",
-  "framework": null,
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/[...path]" },
-    { "source": "/login", "destination": "/index.html" },
-    { "source": "/signup", "destination": "/index.html" },
-    { "source": "/dashboard", "destination": "/index.html" },
-    { "source": "/upgrade", "destination": "/index.html" },
-    { "source": "/payment/(.*)", "destination": "/index.html" },
-    { "source": "/", "destination": "/landing.html" },
-    { "source": "/(.*)", "destination": "/landing.html" }
+    { "source": "/login", "destination": "/app.html" },
+    { "source": "/signup", "destination": "/app.html" },
+    { "source": "/dashboard", "destination": "/app.html" },
+    { "source": "/upgrade", "destination": "/app.html" },
+    { "source": "/payment/(.*)", "destination": "/app.html" },
+    { "source": "/app", "destination": "/app.html" }
   ]
 }
 
