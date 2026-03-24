@@ -414,6 +414,16 @@
     }
 
     .step:hover { background: var(--bg3); }
+
+    .step-num {
+      font-family: 'DM Serif Display', serif;
+      font-size: 36px;
+      color: transparent;
+      -webkit-text-stroke: 1px rgba(29,158,117,0.3);
+      line-height: 1;
+      margin-bottom: 12px;
+    }
+
     .step-icon { font-size: 26px; margin-bottom: 14px; }
 
     .step h3 {
@@ -911,11 +921,6 @@
     </ul>
   </nav>
 
-  <!-- MOBILE STICKY CTA -->
-  <div class="mobile-cta">
-    <a href="https://sellers-inbox-ai.vercel.app/signup">Start free — no card needed →</a>
-  </div>
-
   <!-- HERO -->
   <section class="hero">
     <div class="hero-badge">Now available for Nepali sellers</div>
@@ -987,16 +992,19 @@
 
     <div class="steps">
       <div class="step">
+        <div class="step-num">01</div>
         <div class="step-icon">📦</div>
         <h3>Add your products</h3>
         <p>Add products with prices, colors, sizes, and delivery zones. Takes 5 minutes.</p>
       </div>
       <div class="step">
+        <div class="step-num">02</div>
         <div class="step-icon">📋</div>
         <h3>Paste customer message</h3>
         <p>Copy any message from WhatsApp or Instagram. Paste it into the app.</p>
       </div>
       <div class="step">
+        <div class="step-num">03</div>
         <div class="step-icon">✨</div>
         <h3>Copy and send</h3>
         <p>Get a perfect reply in Romanized Nepali. Copy it and paste back to the customer.</p>
@@ -1052,23 +1060,49 @@
   <section class="section fade-up">
     <div class="section-tag">When to use it</div>
     <h2 class="section-title">AI for the hard part.<br /><em>You handle the rest.</em></h2>
-    <p class="section-sub">Not every message needs AI — here is the honest split.</p>
+    <p class="section-sub">Not every message needs AI — here is a real example of how sellers use it.</p>
 
-    <div class="use-grid">
-      <div class="use-card yes">
-        <div class="use-label">✨ Use AI for these</div>
-        <div class="use-item"><span class="arrow">→</span><span>First inquiry — price, availability, and delivery in one message</span></div>
-        <div class="use-item"><span class="arrow">→</span><span>Discount requests — consistent and polite every time</span></div>
-        <div class="use-item"><span class="arrow">→</span><span>Quality or fabric questions — AI uses your product notes</span></div>
-        <div class="use-item"><span class="arrow">→</span><span>Any message you'd spend 2+ minutes typing manually</span></div>
+    <!-- Real conversation flow -->
+    <div style="max-width:700px;">
+
+      <!-- Step 1 — AI -->
+      <div style="display:flex; gap:12px; align-items:flex-start; margin-bottom:8px;">
+        <div style="background:var(--green-dim); border:1px solid rgba(29,158,117,0.2); border-radius:8px; padding:4px 10px; font-size:11px; font-weight:700; color:var(--green); white-space:nowrap; margin-top:4px;">✨ USE AI</div>
+        <div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">Customer sends first inquiry:</div>
+          <div class="chat-bubble chat-customer" style="max-width:100%; font-size:13px;">"yo blue hoodie M size cha? kati ho price ani delivery Ktm ma huncha?"</div>
+          <div class="chat-bubble chat-ai" style="max-width:100%; font-size:13px; margin-top:4px;">"Cha hajur 😊 Blue M size available cha. Price Rs. 2200 ho. Ktm delivery Rs. 100 lagcha, COD pani available cha."</div>
+        </div>
       </div>
-      <div class="use-card no">
-        <div class="use-label">✋ Reply manually for these</div>
-        <div class="use-item"><span class="arrow">→</span><span>Follow-ups mid-conversation ("okay, M size dinuhos")</span></div>
-        <div class="use-item"><span class="arrow">→</span><span>Order confirmations and payment details</span></div>
-        <div class="use-item"><span class="arrow">→</span><span>Simple one-word replies ("ok", "hunu")</span></div>
-        <div class="use-item"><span class="arrow">→</span><span>Personal conversations you want to handle yourself</span></div>
+
+      <div style="text-align:center; color:var(--border); font-size:20px; margin:8px 0;">↓</div>
+
+      <!-- Step 2 — Manual -->
+      <div style="display:flex; gap:12px; align-items:flex-start; margin-bottom:8px;">
+        <div style="background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:4px 10px; font-size:11px; font-weight:700; color:var(--muted); white-space:nowrap; margin-top:4px;">✋ MANUAL</div>
+        <div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">Customer confirms — 4 words, type manually:</div>
+          <div class="chat-bubble chat-customer" style="max-width:100%; font-size:13px;">"okay M size blue dinuhos"</div>
+          <div style="font-size:12px; color:var(--muted); margin-top:6px; padding:8px 12px; background:var(--bg2); border-radius:8px; border:1px solid var(--border);">Seller types: "hunu, name ra address dinuhos 😊"</div>
+        </div>
       </div>
+
+      <div style="text-align:center; color:var(--border); font-size:20px; margin:8px 0;">↓</div>
+
+      <!-- Step 3 — Manual -->
+      <div style="display:flex; gap:12px; align-items:flex-start; margin-bottom:8px;">
+        <div style="background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:4px 10px; font-size:11px; font-weight:700; color:var(--muted); white-space:nowrap; margin-top:4px;">✋ MANUAL</div>
+        <div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">Customer gives address — send payment details:</div>
+          <div class="chat-bubble chat-customer" style="max-width:100%; font-size:13px;">"Ujwal, Lalitpur-10, 98XXXXXXXX"</div>
+          <div style="font-size:12px; color:var(--muted); margin-top:6px; padding:8px 12px; background:var(--bg2); border-radius:8px; border:1px solid var(--border);">Seller types: "Rs. 2300 eSewa ma pathaunus: 98XXXXXXXX"</div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px; padding:16px 20px; background:var(--bg2); border:1px solid var(--border); border-radius:12px; font-size:13px; color:var(--muted); line-height:1.6;">
+        <strong style="color:var(--text);">The rule is simple:</strong> Use AI for the first inquiry where customers ask about price, availability, and delivery all at once — those take 2-3 minutes to type manually. After that, the conversation is quick back-and-forth that's faster to type yourself.
+      </div>
+
     </div>
   </section>
 
@@ -1119,7 +1153,7 @@
       </div>
     </div>
   </section>
-cd
+
   <div class="divider"></div>
 
   <!-- PRICING -->
