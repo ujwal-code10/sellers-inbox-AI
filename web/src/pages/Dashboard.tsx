@@ -27,6 +27,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+  const [orderFormCopied, setOrderFormCopied] = useState(false)
   const [showPaywall, setShowPaywall] = useState(false)
   const [paywallReason, setPaywallReason] = useState<'replies' | 'products'>('replies')
 
@@ -82,6 +83,28 @@ export default function Dashboard() {
     setCustomerMessage('')
     setResult(null)
     setError('')
+  }
+
+  const handleCopyOrderForm = async () => {
+    const orderFormText = `Order details dinuhos 😊
+
+Full name:
+Contact number:
+Location/Address:`
+
+    try {
+      await navigator.clipboard.writeText(orderFormText)
+    } catch {
+      const textArea = document.createElement('textarea')
+      textArea.value = orderFormText
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+    }
+
+    setOrderFormCopied(true)
+    setTimeout(() => setOrderFormCopied(false), 2000)
   }
 
   return (
@@ -212,6 +235,23 @@ export default function Dashboard() {
                     Clear
                   </button>
                 )}
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <button
+                  onClick={handleCopyOrderForm}
+                  type="button"
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: '1px solid #d9d9d9',
+                    background: '#fff',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: 13
+                  }}
+                >
+                  {orderFormCopied ? '✓ Copied!' : 'Copy order form'}
+                </button>
               </div>
             </div>
 
