@@ -145,9 +145,9 @@ Smart Reply Assistant helps small Nepali Instagram and WhatsApp sellers generate
 - [x] Landing page (premium dark HTML)
 
 ### 2.2 Not Built Yet
-- [ ] Railway backend deployed
-- [ ] Khalti payment
-- [ ] Landing page live with real URLs
+- [*] vercel backend deployed
+- [*] Khalti payment
+- [*] Landing page live with real URLs
 - [ ] Real seller testing
 
 ### 2.3 Future (After Monetization)

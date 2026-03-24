@@ -38,10 +38,23 @@ export default function Products() {
     try {
       const productsData = await api.getProducts()
       setProducts(productsData)
+
+      // Fetch all variants in parallel instead of sequentially
+      const variantPromises = productsData.map(product =>
+        api.getVariants(product.id).then(variants => ({
+          productId: product.id,
+          variants
+        }))
+      )
+
+      const variantResults = await Promise.all(variantPromises)
+
+      // Build the variants map from parallel results
       const variantsMap: Record<number, Variant[]> = {}
-      for (const product of productsData) {
-        variantsMap[product.id] = await api.getVariants(product.id)
-      }
+      variantResults.forEach(result => {
+        variantsMap[result.productId] = result.variants
+      })
+
       setVariantsByProduct(variantsMap)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data')
