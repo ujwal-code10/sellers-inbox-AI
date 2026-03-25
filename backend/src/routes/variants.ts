@@ -15,25 +15,14 @@ router.get(
     const { productId } = req.params;
 
     try {
-      // Verify product belongs to this seller
-      const ownerCheck = await pool.query(
-        `SELECT id FROM products
-         WHERE id = $1 AND user_id = $2`,
-        [productId, req.userId]
-      );
-
-      if (ownerCheck.rows.length === 0) {
-        return res.status(404).json({
-          error: "Product not found or access denied"
-        });
-      }
-
+      // Single query with JOIN - gets variants only if product belongs to user
       const result = await pool.query(
-        `SELECT id, product_id, color, size, available
-         FROM variants
-         WHERE product_id = $1
-         ORDER BY id DESC`,
-        [productId]
+        `SELECT v.id, v.product_id, v.color, v.size, v.available
+         FROM variants v
+         JOIN products p ON p.id = v.product_id
+         WHERE v.product_id = $1 AND p.user_id = $2
+         ORDER BY v.id DESC`,
+        [productId, req.userId]
       );
 
       res.json(result.rows);

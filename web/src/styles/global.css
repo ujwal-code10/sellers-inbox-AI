@@ -573,8 +573,34 @@ body {
   margin-bottom: 20px;
 }
 
-.modal .form-group {
-  margin-bottom: 16px;
+/* Modal input styling - override dark theme for better readability */
+.modal .form-group input:not([type="checkbox"]):not([type="radio"]),
+.modal .form-group textarea {
+  background: #ffffff;
+  color: #1a1a1a;
+  border: 1px solid #ddd;
+  padding: 14px 16px;
+  border-radius: 10px;
+  font-size: 15px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.modal .form-group input:focus,
+.modal .form-group textarea:focus {
+  outline: none;
+  border-color: #1D9E75;
+  box-shadow: 0 0 0 3px rgba(29,158,117,0.1);
+}
+
+.modal .form-group input::placeholder,
+.modal .form-group textarea::placeholder {
+  color: #999;
+}
+
+.modal .form-group label {
+  color: #1a1a1a;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .modal-buttons {
@@ -731,6 +757,18 @@ body {
   border: 1px solid #ddd;
   border-radius: 8px;
   font-size: 14px;
+  background: #ffffff;
+  color: #1a1a1a;
+}
+
+.add-variant-form input:focus {
+  outline: none;
+  border-color: #1D9E75;
+  box-shadow: 0 0 0 2px rgba(29,158,117,0.1);
+}
+
+.add-variant-form input::placeholder {
+  color: #999;
 }
 
 .btn-primary-small {
