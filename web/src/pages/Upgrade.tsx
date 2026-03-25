@@ -91,9 +91,26 @@ export default function Upgrade() {
   return (
     <div style={{ maxWidth: 560, margin: '0 auto', padding: '2rem 1rem' }}>
       <h2 style={{ marginBottom: 4 }}>Upgrade to Pro</h2>
-      <p style={{ color: '#666', marginBottom: 32, fontSize: 14 }}>
+      <p style={{ color: '#666', marginBottom: 20, fontSize: 14 }}>
         Remove limits and reply to unlimited customers
       </p>
+
+      {/* eSewa Testing Banner */}
+      <div style={{
+        background: '#FEF3C7',
+        border: '1px solid #F59E0B',
+        borderRadius: 10,
+        padding: '12px 16px',
+        marginBottom: 24,
+        textAlign: 'center'
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#92400E', marginBottom: 4 }}>
+          ⚠️ Payment Testing Mode
+        </div>
+        <div style={{ fontSize: 12, color: '#92400E' }}>
+          Live payments coming soon! Current payments won't charge real money.
+        </div>
+      </div>
 
       {/* Current Usage */}
       {planData && (

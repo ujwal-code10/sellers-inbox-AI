@@ -298,8 +298,19 @@ export default function Products() {
       {/* ── Products List ── */}
       {products.length === 0 ? (
         <div className="empty-state">
-          <p>No products yet</p>
-          <p className="hint">Add your first product to start generating AI replies</p>
+          <p>📦 No products yet</p>
+          <p className="hint">Add your first product to start generating AI replies for customers</p>
+          <div style={{
+            fontSize: 13,
+            color: '#999',
+            marginTop: 12,
+            lineHeight: 1.4
+          }}>
+            💡 <strong>Next steps:</strong><br />
+            1. Add product name & price<br />
+            2. Paste customer message in Dashboard<br />
+            3. Generate instant AI reply
+          </div>
         </div>
       ) : (
         <div className="products-list">
