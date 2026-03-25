@@ -1,143 +1,80 @@
-# API Contract (MVP – Phase 1)
+# API Contract (Current MVP)
 
-Base URL: /api
+Source of truth: [MASTER_SPEC.md](../MASTER_SPEC.md), Section 7.
 
-Auth:
-- All protected routes require JWT
-- Header format: Authorization: Bearer <token>
+## Base and Conventions
+- Base URL (local): http://localhost:4000/api
+- Auth header: Authorization: Bearer <token>
+- Token expiry: 7 days
+- Standard error: { "error": "message" }
+- Paywall error: { "error": "...", "upgrade": true }
 
-This API supports an AI-assisted reply tool.
-This is NOT a full inbox and does NOT require Meta API in MVP.
+This API powers an AI-assisted reply tool, not a full inbox automation system.
 
----
-
-## Health Check
-
+## Health
 GET /health
 
 Response:
-200 OK
 {
   "status": "ok"
 }
 
-Purpose:
-- Verify backend is running
+## Auth (/auth)
+- POST /auth/signup
+  - Request: { name, email, password }
+  - Response: { token, user }
+- POST /auth/login
+  - Request: { email, password }
+  - Response: { token, user }
+- GET /auth/me
+  - Response: { user }
 
----
+## Products (/products)
+- GET /products
+  - List seller products
+- POST /products
+  - Create product
+  - checkProductLimit middleware applies for Free plan
+- PATCH /products/:id
+  - Update owned product
+- DELETE /products/:id
+  - Delete owned product and cascade variants
 
-## Authentication (Already Implemented)
+## Variants (/api)
+- GET /products/:id/variants
+  - List variants for owned product
+- POST /products/:id/variants
+  - Request: { color, size, available? }
+- PATCH /variants/:id
+  - Request: { available: boolean }
+  - Ownership checked via product join
 
-POST /auth/signup  
-POST /auth/login  
-GET /auth/me  
+## Delivery Zones (/api)
+- GET /delivery-zones
+- POST /delivery-zones
+- PATCH /delivery-zones/:id
+- DELETE /delivery-zones/:id
 
-Purpose:
-- User authentication
-- Session verification
+Notes:
+- Only delivery_zones is valid.
+- delivery_settings is removed.
 
----
+## AI (/ai)
+- POST /ai/suggest-reply
+  - Request: { customerMessage, tone? }
+  - checkReplyLimit middleware applies
+  - Uses product + variant + delivery zone context
+  - On success increments usage_daily
 
-## Products (NEXT FEATURE TO BUILD)
+## Payments (/payments)
+- GET /payments/plans
+  - Returns current plan, usage, pricing
+- POST /payments/esewa/initiate
+  - Request: { billing: "monthly" | "yearly" }
+- POST /payments/esewa/verify
+  - Request: { encodedData, billing }
 
-Products store static product info.
-Created once, reused by AI.
-
-### Create product
-POST /products (protected)
-
-Request:
-{
-  "name": "Hoodie",
-  "price": 2200
-}
-
-Response:
-201 Created
-{
-  "id": 1,
-  "name": "Hoodie",
-  "price": 2200
-}
-
-Purpose:
-- Create a base product
-
----
-
-### Get seller products
-GET /products (protected)
-
-Response:
-200 OK
-[
-  {
-    "id": 1,
-    "name": "Hoodie",
-    "price": 2200
-  }
-]
-
-Purpose:
-- List seller’s products
-- Used by AI suggestions
-
----
-
-## Product Variants (STOCK CONTROL – LATER)
-
-Variants represent dynamic availability.
-
-POST /products/:productId/variants  
-PATCH /variants/:variantId  
-
-Purpose:
-- Define sizes/colors
-- Toggle availability ON/OFF
-- Prevent AI from guessing stock
-
-(Not implemented yet)
-
----
-
-## Delivery Settings (LATER)
-
-PUT /delivery-settings  
-
-Purpose:
-- Seller-defined delivery rules
-- AI must never assume city/location
-
-(Not implemented yet)
-
----
-
-## AI Reply Assistant (CORE FEATURE – LATER)
-
-POST /ai/suggest-reply  
-
-Purpose:
-- Generate reply suggestions only
-- No auto-send
-- Uses product + variant data
-
-(Not implemented yet)
-
----
-
-## Explicitly Out of MVP Scope
-
-- Meta webhooks
-- Instagram inbox sync
+## Out of Scope (MVP)
 - Auto-send replies
-- WhatsApp
-- Order management
-
----
-
-## MVP Success Criteria
-
-- Seller enters product data once
-- Seller can update stock quickly
-- AI never lies about availability
-- Replying is faster than typing manually
+- Meta webhook inbox sync
+- Full order management

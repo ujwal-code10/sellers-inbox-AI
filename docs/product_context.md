@@ -1,56 +1,48 @@
 # Product Context
 
-This is a SaaS app for small Instagram sellers.
+Source of truth: [MASTER_SPEC.md](../MASTER_SPEC.md).
 
-Goal:
-Help sellers reply faster to customer messages using AI-assisted reply suggestions,
-without losing control over tone, language, or context.
+## What This Product Is
+Smart Reply Assistant is a SaaS tool for Nepali Instagram and WhatsApp sellers to generate fast, accurate reply suggestions.
 
-This app is NOT a full automation bot.
-It is an AI assistant that helps sellers compose replies faster.
+The product is AI-assisted, not AI-autonomous.
+Seller always decides what to send.
 
----
+## Current Platform Status
+- Web app is primary (React + Vite).
+- Backend is Node.js + Express + PostgreSQL.
+- Flutter app is paused and planned for later.
 
-MVP Scope (Phase 1 – No Meta API dependency):
+## Core User Goal
+Help sellers respond faster to repeated first-inquiry questions (price, availability, delivery, COD) with consistent quality.
 
-- AI-assisted reply suggestions (seller must approve or edit)
-- Works with pasted or shared customer messages
-- Supports mixed language messages (Nepali + English)
-- Manual product entry (price, sizes, delivery info)
-- One-tap copy of suggested reply
-- Android-first Flutter app
-- Backend: Node.js + PostgreSQL
+## Core Flow
+1. Customer sends message on Instagram/WhatsApp.
+2. Seller copies message into app.
+3. Seller chooses tone and generates reply.
+4. AI matches product context and produces suggestion.
+5. Seller copies, edits if needed, and sends manually.
 
-MVP does NOT:
-- Automatically send replies
-- Control the Instagram inbox
-- Require Meta API approval
-- Replace human judgment
+## MVP Scope (Current)
+- Auth (signup/login/JWT)
+- Product management (name, price, keywords, notes)
+- Variant management (color-size stock rows)
+- Delivery zones and COD settings
+- AI reply suggestions with decision engine
+- Free/Pro plan limits and eSewa billing
 
----
+## Constraints
+- No product selector in AI flow (auto-match only).
+- Romanized Nepali only in reply output; no Devanagari.
+- Never use bhai/dai/didi/sir/madam; use Hajur.
+- No auto-send and no inbox control in MVP.
 
-Core MVP Flow (Phase 1):
+## Out of Scope (MVP)
+- Auto replying
+- Meta API inbox sync
+- Offline mode
+- Team accounts
 
-Customer sends message on Instagram →
-Seller copies or shares message into app →
-AI generates 1–2 suggested replies using product context →
-Seller edits or taps copy →
-Seller sends reply manually in Instagram
-
----
-
-Future Scope (Phase 2 – After validation):
-
-- Instagram Graph API integration
-- Webhook-based message sync
-- In-app inbox
-- One-tap send directly to Instagram
-- Partial automation with strict safeguards
-
----
-
-Rules:
-- No auto replies without seller approval
-- Seller always stays in control
-- No WhatsApp in MVP
-- No unnecessary features before validation
+## Future Direction
+- Resume Flutter after web monetization stabilizes.
+- Add templates, analytics, and deeper integrations in later phases.
