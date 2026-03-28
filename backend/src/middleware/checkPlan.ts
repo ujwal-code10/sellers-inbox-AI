@@ -2,8 +2,9 @@ import { Response, NextFunction } from "express";
 import { AuthRequest } from "./auth.js";
 import pool from "../utils/db.js";
 
-export const FREE_REPLY_LIMIT = 20;
-export const FREE_PRODUCT_LIMIT = 5;
+// Temporary: generous limits during beta testing
+export const FREE_REPLY_LIMIT = 99; //was 20
+export const FREE_PRODUCT_LIMIT = 99;// was 5
 
 // Check daily reply limit for free users
 export async function checkReplyLimit(
