@@ -93,10 +93,18 @@ class ApiClient {
   }
 
   // AI endpoint
-  async suggestReply(customerMessage: string): Promise<{ suggestions: string[]; decision: any }> {
+  async suggestReply(
+    customerMessage: string,
+    tone?: string,
+    forcedProduct?: string
+  ): Promise<{ suggestions: string[]; decision: any }> {
+    const body: any = { customerMessage }
+    if (tone) body.tone = tone
+    if (forcedProduct) body.forcedProduct = forcedProduct
+
     return this.request('/ai/suggest-reply', {
       method: 'POST',
-      body: JSON.stringify({ customerMessage }),
+      body: JSON.stringify(body),
     })
   }
 

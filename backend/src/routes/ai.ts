@@ -48,7 +48,7 @@ function detectIntent(message: string): "PRICE" | "AVAILABILITY" | "DELIVERY" | 
 }
 
 router.post("/ai/suggest-reply", auth, checkReplyLimit, async (req: AuthRequest, res) => {
-  const { customerMessage, tone } = req.body;
+  const { customerMessage, tone, forcedProduct } = req.body;
 
   if (!customerMessage) {
     return res.status(400).json({ error: "customerMessage required" });
@@ -62,6 +62,11 @@ router.post("/ai/suggest-reply", auth, checkReplyLimit, async (req: AuthRequest,
   // Validate tone if provided
   if (tone && !['friendly', 'professional', 'persuasive'].includes(tone.toLowerCase())) {
     return res.status(400).json({ error: "tone must be friendly, professional, or persuasive" });
+  }
+
+  // Validate forcedProduct if provided
+  if (forcedProduct && (typeof forcedProduct !== 'string' || forcedProduct.trim().length === 0)) {
+    return res.status(400).json({ error: "forcedProduct must be a valid product name" });
   }
 
   try {
@@ -81,15 +86,26 @@ router.post("/ai/suggest-reply", auth, checkReplyLimit, async (req: AuthRequest,
     const products = productsRes.rows;
     const variants = variantsRes.rows;
 
-    const productContext = resolveProductContext({
-      messageText: customerMessage,
-      hasMedia: false,
-      source: "DM",
-      products: products.map((p: any) => ({
-        name: p.name,
-        keywords: p.keywords ?? null,
-      })),
-    });
+    let productContext;
+
+    // If forcedProduct is provided, skip product resolution and use it directly
+    if (forcedProduct) {
+      productContext = {
+        productKnown: true,
+        matchedProduct: forcedProduct.trim(),
+      };
+    } else {
+      // Normal product resolution flow
+      productContext = resolveProductContext({
+        messageText: customerMessage,
+        hasMedia: false,
+        source: "DM",
+        products: products.map((p: any) => ({
+          name: p.name,
+          keywords: p.keywords ?? null,
+        })),
+      });
+    }
 
     const intent = detectIntent(customerMessage);
 
@@ -104,8 +120,8 @@ router.post("/ai/suggest-reply", auth, checkReplyLimit, async (req: AuthRequest,
       confidence,
     });
 
-    // If ASK → generate smart clarification
-    if (decision.action === "ASK") {
+    // If ASK → generate smart clarification (only if no forcedProduct)
+    if (decision.action === "ASK" && !forcedProduct) {
       const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
       const clarificationPrompt = `
@@ -153,7 +169,7 @@ Reply text only. Nothing else.
       });
     }
 
-    // If REPLY → generate AI suggestion
+    // If REPLY or if forcedProduct provided → generate AI suggestion
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
     const zonesRes = await pool.query(

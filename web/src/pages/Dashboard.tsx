@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { api } from '../services/api'
+import { api, Product } from '../services/api'
 import Products from './Products'
 import DeliveryZones from './DeliveryZones'
 
@@ -31,6 +31,60 @@ export default function Dashboard() {
   const [showPaywall, setShowPaywall] = useState(false)
   const [paywallReason, setPaywallReason] = useState<'replies' | 'products'>('replies')
 
+  // Product picker state
+  const [products, setProducts] = useState<Product[]>([])
+  const [productsLoading, setProductsLoading] = useState(false)
+  const [productSearch, setProductSearch] = useState('')
+  const [showProductPicker, setShowProductPicker] = useState(false)
+
+  // Load products when reply tab is active
+  useEffect(() => {
+    if (activeTab === 'reply' && products.length === 0 && !productsLoading) {
+      loadProducts()
+    }
+  }, [activeTab])
+
+  const loadProducts = async () => {
+    setProductsLoading(true)
+    try {
+      const productsData = await api.getProducts()
+      setProducts(productsData)
+    } catch (err) {
+      console.error('Failed to load products:', err)
+    } finally {
+      setProductsLoading(false)
+    }
+  }
+
+  // Filter products based on search
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+    (product.keywords && product.keywords.toLowerCase().includes(productSearch.toLowerCase()))
+  )
+
+  const handleProductSelect = async (productName: string) => {
+    if (!customerMessage.trim()) return
+
+    setError('')
+    setLoading(true)
+    setShowProductPicker(false)
+    setProductSearch('')
+
+    try {
+      const response = await api.suggestReply(customerMessage.trim(), undefined, productName)
+      setResult(response)
+    } catch (err: any) {
+      if (err.message === 'Daily limit reached') {
+        setPaywallReason('replies')
+        setShowPaywall(true)
+        return
+      }
+      setError(err instanceof Error ? err.message : 'Failed to generate reply')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleGenerate = async () => {
     if (!customerMessage.trim()) {
       setError('Please paste a customer message')
@@ -44,6 +98,10 @@ export default function Dashboard() {
     try {
       const response = await api.suggestReply(customerMessage.trim())
       setResult(response)
+      // Show product picker if AI asks for clarification and products are available
+      if (response.decision.action === 'ASK' && products.length > 0) {
+        setShowProductPicker(true)
+      }
     } catch (err: any) {
       // Check if this is a paywall error
       if (err.message === 'Daily limit reached') {
@@ -83,6 +141,8 @@ export default function Dashboard() {
     setCustomerMessage('')
     setResult(null)
     setError('')
+    setShowProductPicker(false)
+    setProductSearch('')
   }
 
   const handleCopyOrderForm = async () => {
@@ -278,6 +338,107 @@ Location/Address:`
                     </div>
                   ))}
                 </div>
+
+                {/* Product Picker - shows when AI asks for clarification */}
+                {showProductPicker && (
+                  <div style={{
+                    background: '#f9f9f9',
+                    border: '1px solid #e5e5e5',
+                    borderRadius: 12,
+                    padding: 16,
+                    marginTop: 12
+                  }}>
+                    <div style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#333',
+                      marginBottom: 12
+                    }}>
+                      💡 Select the product you're asking about:
+                    </div>
+
+                    {/* Search input */}
+                    <input
+                      type="text"
+                      placeholder="Search product..."
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #ddd',
+                        borderRadius: 8,
+                        fontSize: 14,
+                        marginBottom: 12
+                      }}
+                    />
+
+                    {/* Product chips */}
+                    {filteredProducts.length > 0 ? (
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+                        gap: 8
+                      }}>
+                        {filteredProducts.map((product) => (
+                          <button
+                            key={product.id}
+                            onClick={() => handleProductSelect(product.name)}
+                            style={{
+                              padding: '10px 12px',
+                              backgroundColor: '#1D9E75',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: 8,
+                              fontSize: 13,
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              transition: 'background-color 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = '#22c48e'
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = '#1D9E75'
+                            }}
+                          >
+                            {product.name}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{
+                        textAlign: 'center',
+                        color: '#666',
+                        fontSize: 14,
+                        padding: 20
+                      }}>
+                        {productSearch ? 'No products found matching your search.' : 'Add products first to use this feature.'}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        setShowProductPicker(false)
+                        setProductSearch('')
+                      }}
+                      style={{
+                        marginTop: 12,
+                        padding: '6px 12px',
+                        background: 'transparent',
+                        color: '#666',
+                        border: '1px solid #ddd',
+                        borderRadius: 6,
+                        fontSize: 12,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+
                 {result.decision.action === 'REPLY' && result.decision.matchedProduct && (
                   <div className="debug-info">
                     <span>Product: {result.decision.matchedProduct}</span>

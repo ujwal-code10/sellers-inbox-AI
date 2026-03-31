@@ -323,15 +323,24 @@ incrementReplyCount:
 
 ```
 POST /api/ai/suggest-reply
+  Request body: { customerMessage, tone?, forcedProduct? }
+
   1. checkReplyLimit middleware
   2. Fetch products + variants + delivery zones
-  3. resolveProductContext() → productKnown + matchedProduct
-  4. detectIntent() → PRICE|AVAILABILITY|DELIVERY|COD|GENERAL
-  5. calculateConfidence() → HIGH|MEDIUM|LOW
-  6. decideReply() → REPLY | ASK
-  7a. ASK → Groq clarification (context-aware)
-  7b. REPLY → Groq with SYSTEM_PROMPT + product context (temp: 0.3)
-  8. incrementReplyCount()
+  3. Optional forcedProduct parameter:
+     - If forcedProduct provided in request body
+     - Skip resolveProductContext()
+     - Use forcedProduct as matchedProduct directly
+     - Set productKnown: true
+     - Proceed directly to Groq reply generation
+  4. Normal flow (if no forcedProduct):
+     - resolveProductContext() → productKnown + matchedProduct
+     - detectIntent() → PRICE|AVAILABILITY|DELIVERY|COD|GENERAL
+     - calculateConfidence() → HIGH|MEDIUM|LOW
+     - decideReply() → REPLY | ASK
+  5a. ASK → Groq clarification (context-aware) + product picker UI
+  5b. REPLY → Groq with SYSTEM_PROMPT + product context (temp: 0.3)
+  6. incrementReplyCount()
 ```
 
 ---
