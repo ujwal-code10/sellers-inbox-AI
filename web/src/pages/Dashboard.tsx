@@ -56,11 +56,14 @@ export default function Dashboard() {
     }
   }
 
-  // Filter products based on search
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-    (product.keywords && product.keywords.toLowerCase().includes(productSearch.toLowerCase()))
-  )
+  // Filter products based on search, sort alphabetically, limit to 8
+  const filteredProducts = products
+    .filter(product =>
+      product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+      (product.keywords && product.keywords.toLowerCase().includes(productSearch.toLowerCase()))
+    )
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, 8)
 
   const handleProductSelect = async (productName: string) => {
     if (!customerMessage.trim()) return
@@ -94,6 +97,7 @@ export default function Dashboard() {
     setError('')
     setLoading(true)
     setResult(null)
+    setShowProductPicker(false)
 
     try {
       const response = await api.suggestReply(customerMessage.trim())
@@ -278,7 +282,10 @@ Location/Address:`
               <textarea
                 id="customerMessage"
                 value={customerMessage}
-                onChange={(e) => setCustomerMessage(e.target.value)}
+                onChange={(e) => {
+                  setCustomerMessage(e.target.value)
+                  setShowProductPicker(false)
+                }}
                 placeholder="Paste customer message here...&#10;&#10;Example: Blue hoodie cha? Price kati ho?"
                 rows={4}
               />
