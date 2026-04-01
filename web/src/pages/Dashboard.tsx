@@ -102,8 +102,10 @@ export default function Dashboard() {
     try {
       const response = await api.suggestReply(customerMessage.trim())
       setResult(response)
-      // Show product picker if AI asks for clarification and products are available
-      if (response.decision.action === 'ASK' && products.length > 0) {
+      // Show product picker if AI asks for clarification
+      if (response.decision.action === 'ASK') {
+        // Refetch products to ensure we have the latest list
+        await loadProducts()
         setShowProductPicker(true)
       }
     } catch (err: any) {
