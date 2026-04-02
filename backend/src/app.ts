@@ -22,7 +22,12 @@ if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
 
 // Warn if eSewa secret is missing (payment will fail but app can start)
 if (!process.env.ESEWA_SECRET_KEY && process.env.NODE_ENV === 'production') {
-  console.error('WARNING: ESEWA_SECRET_KEY not set. Payments will fail.');
+  console.warn('WARNING: ESEWA_SECRET_KEY not set. Payments will fail.');
+}
+
+// Admin JWT Secret warning
+if (!process.env.ADMIN_JWT_SECRET) {
+  console.warn('WARNING: ADMIN_JWT_SECRET not set. Using JWT_SECRET as fallback for admin auth.');
 }
 
 import authRoutes from "./routes/auth";
@@ -32,6 +37,8 @@ import deliveryRoutes from "./routes/delivery.js";
 import aiRoutes from "./routes/ai.js";
 import pool from "./utils/db.js";
 import paymentRoutes from "./routes/payment.js";
+import adminRoutes from "./admin/index.js";
+import { getInitStatus } from "./utils/init.js";
 const app = express();
 
 // Middleware
@@ -43,6 +50,7 @@ app.use("/api", variantRoutes);
 app.use("/api", deliveryRoutes);
 app.use("/api", aiRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Debug endpoint - shows env var status and DB connection on Vercel
 app.get("/api/debug", async (_req, res) => {
@@ -78,6 +86,16 @@ app.get("/", (_req, res) => {
 // Health check route
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
+});
+
+// Admin initialization status endpoint (for debugging)
+app.get("/api/admin/init-status", async (_req, res) => {
+  try {
+    const status = await getInitStatus();
+    res.json({ status: "ok", ...status });
+  } catch (err: any) {
+    res.status(500).json({ status: "error", error: err.message });
+  }
 });
 
 //auth routes

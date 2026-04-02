@@ -5,6 +5,7 @@ import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
 import Upgrade from './pages/Upgrade'
 import PaymentSuccess from './pages/PaymentSuccess'
+import AdminApp from './admin/AdminApp'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -108,6 +109,9 @@ function App() {
       />
 
       <Route path="/payment/failure" element={<PaymentFailure />} />
+
+      {/* Admin Panel */}
+      <Route path="/admin/*" element={<AdminApp />} />
     </Routes>
   )
 }

@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react'
 import { api, DeliveryZone } from '../services/api'
+import { useUIFeedback } from '../context/UIFeedbackContext'
+import AppAlert from '../components/ui/AppAlert'
+import AppButton from '../components/ui/AppButton'
 
 export default function DeliveryZones() {
+  const { notify } = useUIFeedback()
   const [zones, setZones] = useState<DeliveryZone[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -30,7 +34,9 @@ export default function DeliveryZones() {
       const zonesData = await api.getDeliveryZones()
       setZones(zonesData)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load zones')
+      const message = err instanceof Error ? err.message : 'Failed to load zones'
+      setError(message)
+      notify({ type: 'error', title: 'Could not load delivery zones', message })
     } finally {
       setLoading(false)
     }
@@ -51,8 +57,11 @@ export default function DeliveryZones() {
       setNewZonePrice('')
       setNewZoneCod(true)
       setShowAddZone(false)
+      notify({ type: 'success', title: 'Delivery zone added', message: zone.name })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add zone')
+      const message = err instanceof Error ? err.message : 'Failed to add zone'
+      setError(message)
+      notify({ type: 'error', title: 'Could not add zone', message })
     } finally {
       setAddingZone(false)
     }
@@ -77,8 +86,11 @@ export default function DeliveryZones() {
       )
       setZones(zones.map(z => z.id === updated.id ? updated : z))
       setEditingZone(null)
+      notify({ type: 'success', title: 'Delivery zone updated', message: updated.name })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update zone')
+      const message = err instanceof Error ? err.message : 'Failed to update zone'
+      setError(message)
+      notify({ type: 'error', title: 'Could not update zone', message })
     }
   }
 
@@ -88,8 +100,11 @@ export default function DeliveryZones() {
     try {
       await api.deleteDeliveryZone(id)
       setZones(zones.filter(z => z.id !== id))
+      notify({ type: 'success', title: 'Delivery zone deleted' })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete zone')
+      const message = err instanceof Error ? err.message : 'Failed to delete zone'
+      setError(message)
+      notify({ type: 'error', title: 'Could not delete zone', message })
     }
   }
 
@@ -105,12 +120,16 @@ export default function DeliveryZones() {
     <div className="delivery-page">
       <div className="page-header">
         <h2>Delivery Zones</h2>
-        <button onClick={() => setShowAddZone(true)} className="btn-add">
+        <AppButton onClick={() => setShowAddZone(true)} className="btn-add" variant="primary">
           + Add Zone
-        </button>
+        </AppButton>
       </div>
 
-      {error && <div className="error-message">{error}</div>}
+      {error ? (
+        <AppAlert type="error" title="Delivery operation failed">
+          {error}
+        </AppAlert>
+      ) : null}
 
       {/* Add Zone Modal */}
       {showAddZone && (
@@ -146,12 +165,12 @@ export default function DeliveryZones() {
               </label>
             </div>
             <div className="modal-buttons">
-              <button onClick={() => setShowAddZone(false)} className="btn-cancel">
+              <AppButton onClick={() => setShowAddZone(false)} className="btn-cancel" variant="secondary">
                 Cancel
-              </button>
-              <button onClick={handleAddZone} className="btn-primary" disabled={addingZone}>
-                {addingZone ? 'Adding...' : 'Add Zone'}
-              </button>
+              </AppButton>
+              <AppButton onClick={handleAddZone} className="btn-primary" loading={addingZone} loadingText="Adding...">
+                Add Zone
+              </AppButton>
             </div>
           </div>
         </div>
@@ -189,12 +208,12 @@ export default function DeliveryZones() {
               </label>
             </div>
             <div className="modal-buttons">
-              <button onClick={() => setEditingZone(null)} className="btn-cancel">
+              <AppButton onClick={() => setEditingZone(null)} className="btn-cancel" variant="secondary">
                 Cancel
-              </button>
-              <button onClick={handleUpdateZone} className="btn-primary">
+              </AppButton>
+              <AppButton onClick={handleUpdateZone} className="btn-primary">
                 Save Changes
-              </button>
+              </AppButton>
             </div>
           </div>
         </div>

@@ -16,6 +16,26 @@ export interface MeResponse {
   user: User
 }
 
+export interface PlanResponse {
+  current: {
+    plan: 'free' | 'pro'
+    billing: 'monthly' | 'yearly' | null
+    status: string
+    expires_at: string | null
+  }
+  usage: {
+    replies_today: number
+    replies_limit: number | null
+    products: number
+    products_limit: number | null
+  }
+  plans: {
+    free: { price: number; replies_per_day: number; products: number }
+    pro_monthly: { price: number; replies_per_day: null; products: null }
+    pro_yearly: { price: number; replies_per_day: null; products: null }
+  }
+}
+
 export interface Product {
   id: number
   name: string
@@ -90,6 +110,13 @@ class ApiClient {
 
   async getMe(): Promise<MeResponse> {
     return this.request<MeResponse>('/auth/me')
+  }
+
+  async updateMeName(name: string): Promise<MeResponse> {
+    return this.request<MeResponse>('/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    })
   }
 
   // AI endpoint
@@ -190,8 +217,8 @@ class ApiClient {
   }
 
   // Payment endpoints
-  async getPlans(): Promise<any> {
-    return this.request('/payments/plans')
+  async getPlans(): Promise<PlanResponse> {
+    return this.request<PlanResponse>('/payments/plans')
   }
 
   async initiateEsewa(billing: 'monthly' | 'yearly'): Promise<any> {

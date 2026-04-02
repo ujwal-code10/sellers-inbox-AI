@@ -1,9 +1,24 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ComponentType } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { api, Product } from '../services/api'
+import { useUIFeedback } from '../context/UIFeedbackContext'
+import {
+  Copy06,
+  CreditCard01,
+  Edit03,
+  LogOut01,
+  MarkerPin02,
+  MessageChatCircle,
+  Package,
+  User01,
+  Zap,
+} from '@untitledui/icons'
+import { api, Product, PlanResponse } from '../services/api'
+import AppAlert from '../components/ui/AppAlert'
+import AppButton from '../components/ui/AppButton'
 import Products from './Products'
 import DeliveryZones from './DeliveryZones'
+import Upgrade from './Upgrade'
 
 interface ReplyResult {
   suggestions: string[]
@@ -16,12 +31,97 @@ interface ReplyResult {
   }
 }
 
-type Tab = 'reply' | 'products' | 'delivery'
+type Tab = 'reply' | 'products' | 'delivery' | 'payment' | 'profile'
+
+interface DashboardNavItem {
+  key: Tab
+  label: string
+  note: string
+  icon: ComponentType<{ className?: string }>
+}
+
+const dashboardNavItems: DashboardNavItem[] = [
+  {
+    key: 'reply',
+    label: 'Reply',
+    note: 'Generate smart response suggestions',
+    icon: MessageChatCircle,
+  },
+  {
+    key: 'products',
+    label: 'Products',
+    note: 'Manage catalog and variants',
+    icon: Package,
+  },
+  {
+    key: 'delivery',
+    label: 'Delivery',
+    note: 'Configure zones and COD rules',
+    icon: MarkerPin02,
+  },
+  {
+    key: 'payment',
+    label: 'Payment',
+    note: 'Upgrade plan and billing',
+    icon: CreditCard01,
+  },
+  {
+    key: 'profile',
+    label: 'Profile',
+    note: 'Account details and usage',
+    icon: User01,
+  },
+]
+
+const tabHeadings: Record<Tab, { title: string; description: string }> = {
+  reply: {
+    title: 'AI Reply Workspace',
+    description: 'Paste customer chats and get polished, context-aware replies in seconds.',
+  },
+  products: {
+    title: 'Product Catalog',
+    description: 'Keep products and variants updated so replies stay accurate.',
+  },
+  delivery: {
+    title: 'Delivery Settings',
+    description: 'Set up delivery zones and COD options for cleaner operations.',
+  },
+  payment: {
+    title: 'Billing & Plan',
+    description: 'Manage your subscription and unlock unlimited usage.',
+  },
+  profile: {
+    title: 'Profile',
+    description: 'Manage your account details, plan usage, and actions.',
+  },
+}
+
+async function copyToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    document.body.appendChild(textArea)
+    textArea.select()
+    const copied = document.execCommand('copy')
+    document.body.removeChild(textArea)
+    return copied
+  }
+}
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
+  const { notify } = useUIFeedback()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<Tab>('reply')
+  const [profileName, setProfileName] = useState(user?.name ?? '')
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState(user?.name ?? '')
+  const [savingName, setSavingName] = useState(false)
+  const [planData, setPlanData] = useState<PlanResponse | null>(null)
+  const [planLoading, setPlanLoading] = useState(false)
   const [customerMessage, setCustomerMessage] = useState('')
   const [result, setResult] = useState<ReplyResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -44,6 +144,20 @@ export default function Dashboard() {
     }
   }, [activeTab])
 
+  useEffect(() => {
+    const nextName = user?.name ?? ''
+    setProfileName(nextName)
+    if (!editingName) {
+      setNameDraft(nextName)
+    }
+  }, [user?.name, editingName])
+
+  useEffect(() => {
+    if (activeTab === 'profile') {
+      loadPlanData()
+    }
+  }, [activeTab])
+
   const loadProducts = async () => {
     setProductsLoading(true)
     try {
@@ -53,6 +167,19 @@ export default function Dashboard() {
       console.error('Failed to load products:', err)
     } finally {
       setProductsLoading(false)
+    }
+  }
+
+  const loadPlanData = async () => {
+    setPlanLoading(true)
+    try {
+      const data = await api.getPlans()
+      setPlanData(data)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load plan details'
+      notify({ type: 'error', title: 'Could not load plan details', message })
+    } finally {
+      setPlanLoading(false)
     }
   }
 
@@ -76,13 +203,20 @@ export default function Dashboard() {
     try {
       const response = await api.suggestReply(customerMessage.trim(), undefined, productName)
       setResult(response)
+      notify({
+        type: 'success',
+        title: 'Reply refreshed with selected product',
+        message: productName,
+      })
     } catch (err: any) {
       if (err.message === 'Daily limit reached') {
         setPaywallReason('replies')
         setShowPaywall(true)
         return
       }
-      setError(err instanceof Error ? err.message : 'Failed to generate reply')
+      const message = err instanceof Error ? err.message : 'Failed to generate reply'
+      setError(message)
+      notify({ type: 'error', title: 'Could not generate reply', message })
     } finally {
       setLoading(false)
     }
@@ -91,6 +225,11 @@ export default function Dashboard() {
   const handleGenerate = async () => {
     if (!customerMessage.trim()) {
       setError('Please paste a customer message')
+      notify({
+        type: 'warning',
+        title: 'Message required',
+        message: 'Paste a customer message to generate suggestions.',
+      })
       return
     }
 
@@ -107,39 +246,56 @@ export default function Dashboard() {
         // Refetch products to ensure we have the latest list
         await loadProducts()
         setShowProductPicker(true)
+        notify({
+          type: 'info',
+          title: 'More context needed',
+          message: 'Select a product so the reply can be more accurate.',
+        })
+      } else {
+        notify({
+          type: 'success',
+          title: 'Reply suggestions generated',
+          message: 'You can copy any suggestion below.',
+        })
       }
     } catch (err: any) {
       // Check if this is a paywall error
       if (err.message === 'Daily limit reached') {
         setPaywallReason('replies')
         setShowPaywall(true)
+        notify({
+          type: 'info',
+          title: 'Daily free reply limit reached',
+          message: 'Upgrade to continue with unlimited replies.',
+        })
         return
       }
       if (err.message === 'Product limit reached') {
         setPaywallReason('products')
         setShowPaywall(true)
+        notify({
+          type: 'info',
+          title: 'Free product limit reached',
+          message: 'Upgrade to add more products.',
+        })
         return
       }
-      setError(err instanceof Error ? err.message : 'Failed to generate reply')
+      const message = err instanceof Error ? err.message : 'Failed to generate reply'
+      setError(message)
+      notify({ type: 'error', title: 'Could not generate reply', message })
     } finally {
       setLoading(false)
     }
   }
 
   const handleCopy = async (text: string, index: number) => {
-    try {
-      await navigator.clipboard.writeText(text)
+    const copied = await copyToClipboard(text)
+    if (copied) {
       setCopiedIndex(index)
       setTimeout(() => setCopiedIndex(null), 2000)
-    } catch {
-      const textArea = document.createElement('textarea')
-      textArea.value = text
-      document.body.appendChild(textArea)
-      textArea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textArea)
-      setCopiedIndex(index)
-      setTimeout(() => setCopiedIndex(null), 2000)
+      notify({ type: 'success', title: 'Copied to clipboard' })
+    } else {
+      notify({ type: 'error', title: 'Copy failed', message: 'Please try again.' })
     }
   }
 
@@ -158,24 +314,103 @@ Full name:
 Contact number:
 Location/Address:`
 
-    try {
-      await navigator.clipboard.writeText(orderFormText)
-    } catch {
-      const textArea = document.createElement('textarea')
-      textArea.value = orderFormText
-      document.body.appendChild(textArea)
-      textArea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textArea)
+    const copied = await copyToClipboard(orderFormText)
+
+    if (copied) {
+      setOrderFormCopied(true)
+      notify({ type: 'success', title: 'Order form copied' })
+      setTimeout(() => setOrderFormCopied(false), 2000)
+      return
     }
 
-    setOrderFormCopied(true)
-    setTimeout(() => setOrderFormCopied(false), 2000)
+    notify({ type: 'error', title: 'Copy failed', message: 'Please copy manually.' })
   }
+
+  const handleSaveName = async () => {
+    const nextName = nameDraft.trim()
+
+    if (!nextName) {
+      notify({ type: 'warning', title: 'Name required', message: 'Enter your name before saving.' })
+      return
+    }
+
+    if (nextName.length > 100) {
+      notify({ type: 'warning', title: 'Name too long', message: 'Name must be at most 100 characters.' })
+      return
+    }
+
+    setSavingName(true)
+    try {
+      const response = await api.updateMeName(nextName)
+      setProfileName(response.user.name)
+      setNameDraft(response.user.name)
+      setEditingName(false)
+      notify({ type: 'success', title: 'Profile updated', message: 'Name saved successfully.' })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update profile name'
+      notify({ type: 'error', title: 'Could not update name', message })
+    } finally {
+      setSavingName(false)
+    }
+  }
+
+  const repliesToday = planData?.usage.replies_today ?? 0
+  const repliesLimit = planData?.usage.replies_limit
+  const repliesProgressPercent = repliesLimit
+    ? Math.min(100, Math.round((repliesToday / repliesLimit) * 100))
+    : 100
+
+  const repliesProgressColor = repliesProgressPercent > 95
+    ? '#dc2626'
+    : repliesProgressPercent >= 80
+      ? '#d97706'
+      : '#1d9e75'
+
+  const proExpiryLabel = planData?.current.expires_at
+    ? new Date(planData.current.expires_at).toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    })
+    : 'Active'
+
+  const profileCardStyle = {
+    background: '#ffffff',
+    border: '1px solid #e4ebe7',
+    borderRadius: 12,
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+    padding: '18px 18px 16px',
+  } as const
+
+  const profileSectionTitleStyle = {
+    fontSize: 11,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+    color: '#6a7b73',
+    fontWeight: 700,
+    marginBottom: 14,
+  } as const
+
+  const profileRowStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 10,
+    fontSize: 14,
+  } as const
+
+  const profileLabelStyle = {
+    color: '#5f6f67',
+    fontWeight: 600,
+  } as const
+
+  const profileValueStyle = {
+    color: '#1d2e25',
+    fontWeight: 700,
+  } as const
 
   return (
     <div className="dashboard">
-
       {/* ── Paywall Modal ── */}
       {showPaywall && (
         <div
@@ -183,285 +418,487 @@ Location/Address:`
           onClick={() => setShowPaywall(false)}
         >
           <div
-            className="modal"
+            className="modal paywall-modal"
             onClick={e => e.stopPropagation()}
-            style={{ textAlign: 'center', padding: '2rem' }}
           >
-            <div style={{ fontSize: 40, marginBottom: 12 }}>⚡</div>
-            <h3 style={{ marginBottom: 8 }}>
+            <div className="paywall-icon"><Zap className="paywall-icon-svg" /></div>
+            <h3 className="paywall-title">
               {paywallReason === 'replies'
                 ? "You've used all 20 free replies today"
                 : "You've reached the 5 product limit"
               }
             </h3>
-            <p style={{ color: '#666', fontSize: 14, marginBottom: 24 }}>
+            <p className="paywall-message">
               {paywallReason === 'replies'
                 ? 'Upgrade to Pro for unlimited replies every day'
                 : 'Upgrade to Pro for unlimited products'
               }
             </p>
-            <button
+            <AppButton
               onClick={() => navigate('/upgrade')}
-              style={{
-                width: '100%', padding: '12px 0',
-                borderRadius: 10, border: 'none',
-                background: '#1D9E75', color: '#fff',
-                fontWeight: 700, fontSize: 15,
-                cursor: 'pointer', marginBottom: 10
-              }}
+              variant="primary"
+              size="lg"
+              fullWidth
+              className="paywall-upgrade-btn"
             >
               Upgrade to Pro — Rs. 299/month
-            </button>
-            <button
+            </AppButton>
+            <AppButton
               onClick={() => setShowPaywall(false)}
-              style={{
-                width: '100%', padding: '10px 0',
-                borderRadius: 10, border: '0.5px solid #e5e5e5',
-                background: 'transparent', color: '#888',
-                fontSize: 14, cursor: 'pointer'
-              }}
+              variant="secondary"
+              fullWidth
             >
               Maybe later
-            </button>
+            </AppButton>
           </div>
         </div>
       )}
 
-      <header className="dashboard-header">
-        <h1>Seller Inbox AI</h1>
-        <div className="header-right">
-          <span className="user-name">{user?.name}</span>
-          <button
-            onClick={() => navigate('/upgrade')}
-            style={{
-              padding: '6px 14px',
-              borderRadius: 20,
-              border: '1.5px solid #1D9E75',
-              background: 'transparent',
-              color: '#1D9E75',
-              fontWeight: 600,
-              fontSize: 13,
-              cursor: 'pointer',
-              marginRight: 8
-            }}
-          >
-            ⚡ Upgrade
-          </button>
-          <button onClick={logout} className="btn-logout">
-            Logout
-          </button>
-        </div>
-      </header>
+      <div className="dashboard-shell">
+        <aside className="dashboard-sidebar">
+          <div className="sidebar-brand">
+            <div className="sidebar-brand-mark">
+              <Zap className="sidebar-brand-icon" />
+            </div>
+            <div>
+              <p className="sidebar-brand-kicker">Seller Workspace</p>
+              <h1>Inbox AI</h1>
+            </div>
+          </div>
 
-      {/* Tab Navigation */}
-      <nav className="tab-nav">
-        <button
-          className={`tab-btn ${activeTab === 'reply' ? 'active' : ''}`}
-          onClick={() => setActiveTab('reply')}
-        >
-          💬 Reply
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'products' ? 'active' : ''}`}
-          onClick={() => setActiveTab('products')}
-        >
-           Products
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'delivery' ? 'active' : ''}`}
-          onClick={() => setActiveTab('delivery')}
-        >
-           Delivery
-        </button>
-      </nav>
+          <p className="sidebar-section-label">Main</p>
+          <nav className="sidebar-nav" aria-label="Dashboard navigation">
+            {dashboardNavItems.map((item, index) => {
+              const Icon = item.icon
+              const isActive = activeTab === item.key
 
-      <main className="dashboard-main">
-        {/* Reply Tab */}
-        {activeTab === 'reply' && (
-          <div className="reply-generator">
-            <div className="input-section">
-              <label htmlFor="customerMessage">Customer Message</label>
-              <textarea
-                id="customerMessage"
-                value={customerMessage}
-                onChange={(e) => {
-                  setCustomerMessage(e.target.value)
-                  setShowProductPicker(false)
-                }}
-                placeholder="Paste customer message here...&#10;&#10;Example: Blue hoodie cha? Price kati ho?"
-                rows={4}
-              />
-              <div className="button-row">
+              return (
                 <button
-                  onClick={handleGenerate}
-                  className="btn-generate"
-                  disabled={loading}
+                  key={item.key}
+                  className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
+                  onClick={() => setActiveTab(item.key)}
+                  style={{ animationDelay: `${0.06 * index}s` }}
                 >
-                  {loading ? 'Generating...' : '✨ Generate Reply'}
+                  <Icon className="sidebar-nav-icon" />
+                  <span className="sidebar-nav-copy">
+                    <span className="sidebar-nav-label">{item.label}</span>
+                    <span className="sidebar-nav-note">{item.note}</span>
+                  </span>
                 </button>
-                {(customerMessage || result) && (
-                  <button onClick={handleClear} className="btn-clear">
-                    Clear
-                  </button>
-                )}
+              )
+            })}
+          </nav>
+
+          <p className="sidebar-section-label">Account</p>
+          <div className="sidebar-footer">
+            <button
+              type="button"
+              className="sidebar-upgrade"
+              onClick={() => setActiveTab('payment')}
+            >
+              <Zap className="sidebar-upgrade-icon" />
+              <span>
+                <strong>Upgrade to Pro</strong>
+                <small>Unlimited replies and products</small>
+              </span>
+            </button>
+
+            <div className="sidebar-profile">
+              <div className="sidebar-profile-avatar">
+                <User01 className="sidebar-profile-icon" />
               </div>
-              <div style={{ marginTop: 10 }}>
-                <button
-                  onClick={handleCopyOrderForm}
-                  type="button"
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 8,
-                    border: '1px solid #d9d9d9',
-                    background: '#fff',
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                    fontSize: 13
-                  }}
-                >
-                  {orderFormCopied ? '✓ Copied!' : 'Copy order form'}
-                </button>
+              <div className="sidebar-profile-copy">
+                <span className="sidebar-profile-name">{profileName || 'Seller'}</span>
+                <span className="sidebar-profile-email">{user?.email ?? 'seller@inbox-ai.app'}</span>
               </div>
             </div>
 
-            {error && <div className="error-message">{error}</div>}
+            <AppButton
+              onClick={logout}
+              className="sidebar-logout-btn"
+              variant="secondary"
+              size="sm"
+              fullWidth
+              leftIcon={<LogOut01 className="app-icon-sm" />}
+            >
+              Logout
+            </AppButton>
+          </div>
+        </aside>
 
-            {result && (
-              <div className="results-section">
-                <div className={`action-badge ${result.decision.action.toLowerCase()}`}>
-                  {result.decision.action === 'ASK'
-                    ? '❓ Clarification Needed'
-                    : '✅ Reply Suggestions'
-                  }
+        <section className="dashboard-content">
+          <div className="dashboard-content-head">
+            <div>
+              <p className="dashboard-content-kicker">Seller Inbox AI</p>
+              <h2>{tabHeadings[activeTab].title}</h2>
+              <p>{tabHeadings[activeTab].description}</p>
+            </div>
+            <div className="dashboard-content-actions">
+              <AppButton
+                onClick={() => setActiveTab('payment')}
+                variant="pill"
+                size="sm"
+                leftIcon={<Zap className="app-icon-sm" />}
+              >
+                Upgrade
+              </AppButton>
+              <AppButton
+                onClick={logout}
+                className="dashboard-mobile-logout"
+                variant="danger"
+                size="sm"
+                leftIcon={<LogOut01 className="app-icon-sm" />}
+              >
+                Logout
+              </AppButton>
+            </div>
+          </div>
+
+          <main className="dashboard-main">
+            {/* Reply Tab */}
+            {activeTab === 'reply' && (
+              <div className="reply-generator">
+                <div className="input-section">
+                  <label htmlFor="customerMessage">Customer Message</label>
+                  <textarea
+                    id="customerMessage"
+                    value={customerMessage}
+                    onChange={(e) => {
+                      setCustomerMessage(e.target.value)
+                      setShowProductPicker(false)
+                    }}
+                    placeholder="Paste customer message here...&#10;&#10;Example: Blue hoodie cha? Price kati ho?"
+                    rows={4}
+                  />
+                  <div className="button-row">
+                    <AppButton
+                      onClick={handleGenerate}
+                      className="btn-generate-modern"
+                      loading={loading}
+                      loadingText="Generating..."
+                      fullWidth
+                      leftIcon={<Zap className="app-icon-sm" />}
+                    >
+                      Generate Reply
+                    </AppButton>
+                    {(customerMessage || result) && (
+                      <AppButton onClick={handleClear} className="btn-clear-modern" variant="secondary">
+                        Clear
+                      </AppButton>
+                    )}
+                  </div>
+                  <div className="reply-order-form-wrap">
+                    <AppButton
+                      onClick={handleCopyOrderForm}
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      leftIcon={<Copy06 className="app-icon-sm" />}
+                    >
+                      {orderFormCopied ? '✓ Copied!' : 'Copy order form'}
+                    </AppButton>
+                  </div>
                 </div>
-                <div className="suggestions-list">
-                  {result.suggestions.map((suggestion, index) => (
-                    <div key={index} className="suggestion-card">
-                      <p className="suggestion-text">{suggestion}</p>
-                      <button
-                        onClick={() => handleCopy(suggestion, index)}
-                        className="btn-copy"
-                      >
-                        {copiedIndex === index ? '✓ Copied!' : '📋 Copy'}
-                      </button>
+
+                {error ? (
+                  <AppAlert type="error" title="Could not generate reply">
+                    {error}
+                  </AppAlert>
+                ) : null}
+
+                {result && (
+                  <div className="results-section">
+                    <div className={`action-badge ${result.decision.action.toLowerCase()}`}>
+                      {result.decision.action === 'ASK'
+                        ? '❓ Clarification Needed'
+                        : '✅ Reply Suggestions'
+                      }
                     </div>
-                  ))}
-                </div>
-
-                {/* Product Picker - shows when AI asks for clarification */}
-                {showProductPicker && (
-                  <div style={{
-                    background: '#f9f9f9',
-                    border: '1px solid #e5e5e5',
-                    borderRadius: 12,
-                    padding: 16,
-                    marginTop: 12
-                  }}>
-                    <div style={{
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: '#333',
-                      marginBottom: 12
-                    }}>
-                      💡 Select the product you're asking about:
-                    </div>
-
-                    {/* Search input */}
-                    <input
-                      type="text"
-                      placeholder="Search product..."
-                      value={productSearch}
-                      onChange={(e) => setProductSearch(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        border: '1px solid #ddd',
-                        borderRadius: 8,
-                        fontSize: 14,
-                        marginBottom: 12
-                      }}
-                    />
-
-                    {/* Product chips */}
-                    {filteredProducts.length > 0 ? (
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-                        gap: 8
-                      }}>
-                        {filteredProducts.map((product) => (
-                          <button
-                            key={product.id}
-                            onClick={() => handleProductSelect(product.name)}
-                            style={{
-                              padding: '10px 12px',
-                              backgroundColor: '#1D9E75',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: 8,
-                              fontSize: 13,
-                              fontWeight: 500,
-                              cursor: 'pointer',
-                              textAlign: 'left',
-                              transition: 'background-color 0.2s'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = '#22c48e'
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = '#1D9E75'
-                            }}
+                    <div className="suggestions-list">
+                      {result.suggestions.map((suggestion, index) => (
+                        <div key={index} className="suggestion-card">
+                          <p className="suggestion-text">{suggestion}</p>
+                          <AppButton
+                            onClick={() => handleCopy(suggestion, index)}
+                            className="suggestion-copy-btn"
+                            variant="secondary"
+                            size="sm"
+                            leftIcon={<Copy06 className="app-icon-sm" />}
                           >
-                            {product.name}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={{
-                        textAlign: 'center',
-                        color: '#666',
-                        fontSize: 14,
-                        padding: 20
-                      }}>
-                        {productSearch ? 'No products found matching your search.' : 'Add products first to use this feature.'}
+                            {copiedIndex === index ? '✓ Copied!' : '📋 Copy'}
+                          </AppButton>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Product Picker - shows when AI asks for clarification */}
+                    {showProductPicker && (
+                      <div className="product-picker">
+                        <div className="product-picker-title">
+                          💡 Select the product you're asking about:
+                        </div>
+
+                        {/* Search input */}
+                        <input
+                          type="text"
+                          placeholder="Search product..."
+                          value={productSearch}
+                          onChange={(e) => setProductSearch(e.target.value)}
+                          className="product-picker-search"
+                        />
+
+                        {/* Product chips */}
+                        {filteredProducts.length > 0 ? (
+                          <div className="product-chip-grid">
+                            {filteredProducts.map((product) => (
+                              <button
+                                key={product.id}
+                                onClick={() => handleProductSelect(product.name)}
+                                className="product-chip-btn"
+                              >
+                                {product.name}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="product-picker-empty">
+                            {productSearch ? 'No products found matching your search.' : 'Add products first to use this feature.'}
+                          </div>
+                        )}
+
+                        <AppButton
+                          onClick={() => {
+                            setShowProductPicker(false)
+                            setProductSearch('')
+                          }}
+                          variant="secondary"
+                          size="sm"
+                          className="product-picker-cancel"
+                        >
+                          Cancel
+                        </AppButton>
                       </div>
                     )}
 
-                    <button
-                      onClick={() => {
-                        setShowProductPicker(false)
-                        setProductSearch('')
-                      }}
-                      style={{
-                        marginTop: 12,
-                        padding: '6px 12px',
-                        background: 'transparent',
-                        color: '#666',
-                        border: '1px solid #ddd',
-                        borderRadius: 6,
-                        fontSize: 12,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-
-                {result.decision.action === 'REPLY' && result.decision.matchedProduct && (
-                  <div className="debug-info">
-                    <span>Product: {result.decision.matchedProduct}</span>
-                    <span>Intent: {result.decision.intent}</span>
+                    {result.decision.action === 'REPLY' && result.decision.matchedProduct && (
+                      <div className="debug-info">
+                        <span>Product: {result.decision.matchedProduct}</span>
+                        <span>Intent: {result.decision.intent}</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             )}
-          </div>
-        )}
 
-        {activeTab === 'products' && <Products />}
-        {activeTab === 'delivery' && <DeliveryZones />}
-      </main>
+            {activeTab === 'products' && <Products />}
+            {activeTab === 'delivery' && <DeliveryZones />}
+            {activeTab === 'payment' && (
+              <div className="payment-tab-wrap">
+                <Upgrade />
+              </div>
+            )}
+            {activeTab === 'profile' && (
+              <div style={{ width: '100%', maxWidth: 760, display: 'grid', gap: 14 }}>
+                <section style={profileCardStyle}>
+                  <p style={profileSectionTitleStyle}>👤 Account</p>
+
+                  <div style={profileRowStyle}>
+                    <span style={profileLabelStyle}>Name</span>
+                    {editingName ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <input
+                          type="text"
+                          value={nameDraft}
+                          onChange={(e) => setNameDraft(e.target.value)}
+                          style={{
+                            minWidth: 180,
+                            maxWidth: '100%',
+                            padding: '8px 10px',
+                            borderRadius: 8,
+                            border: '1px solid #cdd8d2',
+                            fontSize: 14,
+                          }}
+                          aria-label="Edit account name"
+                        />
+                        <AppButton
+                          onClick={handleSaveName}
+                          size="sm"
+                          loading={savingName}
+                          loadingText="Saving..."
+                        >
+                          Save
+                        </AppButton>
+                        <AppButton
+                          onClick={() => {
+                            setNameDraft(profileName)
+                            setEditingName(false)
+                          }}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          Cancel
+                        </AppButton>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={profileValueStyle}>{profileName || 'Seller'}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNameDraft(profileName)
+                            setEditingName(true)
+                          }}
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 7,
+                            border: '1px solid #d3ddd8',
+                            background: '#ffffff',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            color: '#4f6258',
+                          }}
+                          aria-label="Edit name"
+                        >
+                          <Edit03 className="app-icon-sm" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ ...profileRowStyle, marginBottom: 0 }}>
+                    <span style={profileLabelStyle}>Email</span>
+                    <span style={profileValueStyle}>{user?.email ?? 'No email found'}</span>
+                  </div>
+                </section>
+
+                <section style={profileCardStyle}>
+                  <p style={profileSectionTitleStyle}>⚡ Your Plan</p>
+
+                  {planLoading ? (
+                    <div style={{ color: '#586a61', fontSize: 14 }}>Loading plan details...</div>
+                  ) : !planData ? (
+                    <div>
+                      <div style={{ color: '#586a61', fontSize: 14, marginBottom: 10 }}>
+                        Plan details are unavailable right now.
+                      </div>
+                      <AppButton onClick={loadPlanData} variant="secondary" size="sm">
+                        Retry
+                      </AppButton>
+                    </div>
+                  ) : planData?.current.plan === 'pro' ? (
+                    <>
+                      <div style={profileRowStyle}>
+                        <span style={profileLabelStyle}>Plan</span>
+                        <span style={profileValueStyle}>PRO ✓</span>
+                      </div>
+                      <div style={profileRowStyle}>
+                        <span style={profileLabelStyle}>Replies</span>
+                        <span style={profileValueStyle}>Unlimited</span>
+                      </div>
+                      <div style={{ ...profileRowStyle, marginBottom: 14 }}>
+                        <span style={profileLabelStyle}>Expires</span>
+                        <span style={profileValueStyle}>{proExpiryLabel}</span>
+                      </div>
+                      <AppButton
+                        onClick={() => navigate('/upgrade')}
+                        variant="secondary"
+                        size="sm"
+                      >
+                        Manage subscription
+                      </AppButton>
+                    </>
+                  ) : (
+                    <>
+                      <div style={profileRowStyle}>
+                        <span style={profileLabelStyle}>Plan</span>
+                        <span style={profileValueStyle}>FREE</span>
+                      </div>
+                      <div style={{ ...profileRowStyle, marginBottom: 8 }}>
+                        <span style={profileLabelStyle}>Replies today</span>
+                        <span style={profileValueStyle}>
+                          {repliesToday} / {repliesLimit ?? '∞'}
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          height: 6,
+                          width: '100%',
+                          background: '#e5ebe7',
+                          borderRadius: 3,
+                          overflow: 'hidden',
+                          marginBottom: 8,
+                        }}
+                        aria-label="Replies usage progress"
+                      >
+                        <div
+                          style={{
+                            width: `${repliesProgressPercent}%`,
+                            height: '100%',
+                            background: repliesProgressColor,
+                            borderRadius: 3,
+                            transition: 'width 220ms ease',
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ color: '#5e7067', fontSize: 12, marginBottom: 14 }}>
+                        {repliesProgressPercent}% used
+                      </div>
+
+                      <AppButton
+                        onClick={() => setActiveTab('payment')}
+                        size="sm"
+                        leftIcon={<Zap className="app-icon-sm" />}
+                      >
+                        Upgrade to Pro
+                      </AppButton>
+                    </>
+                  )}
+                </section>
+
+                <section style={profileCardStyle}>
+                  <p style={profileSectionTitleStyle}>Account Actions</p>
+                  <AppButton
+                    onClick={logout}
+                    variant="danger"
+                    size="sm"
+                    leftIcon={<LogOut01 className="app-icon-sm" />}
+                  >
+                    → Logout
+                  </AppButton>
+                </section>
+              </div>
+            )}
+          </main>
+        </section>
+      </div>
+
+      <nav
+        className="dashboard-mobile-nav"
+        aria-label="Mobile dashboard navigation"
+        style={{ gridTemplateColumns: `repeat(${dashboardNavItems.length}, minmax(0, 1fr))` }}
+      >
+        {dashboardNavItems.map((item) => {
+          const Icon = item.icon
+          const isActive = activeTab === item.key
+
+          return (
+            <button
+              key={item.key}
+              className={`dashboard-mobile-tab ${isActive ? 'active' : ''}`}
+              onClick={() => setActiveTab(item.key)}
+            >
+              <Icon className="dashboard-mobile-tab-icon" />
+              <span>{item.label}</span>
+            </button>
+          )
+        })}
+      </nav>
     </div>
   )
 }

@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
 import { api, Product, Variant } from '../services/api'
+import { useUIFeedback } from '../context/UIFeedbackContext'
+import AppAlert from '../components/ui/AppAlert'
+import AppButton from '../components/ui/AppButton'
 
 interface VariantRow {
   color: string
@@ -8,6 +11,7 @@ interface VariantRow {
 }
 
 export default function Products() {
+  const { notify } = useUIFeedback()
   const [products, setProducts] = useState<Product[]>([])
   const [variantsByProduct, setVariantsByProduct] = useState<Record<number, Variant[]>>({})
   const [loading, setLoading] = useState(true)
@@ -57,7 +61,9 @@ export default function Products() {
 
       setVariantsByProduct(variantsMap)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data')
+      const message = err instanceof Error ? err.message : 'Failed to load data'
+      setError(message)
+      notify({ type: 'error', title: 'Could not load products', message })
     } finally {
       setLoading(false)
     }
@@ -104,8 +110,14 @@ export default function Products() {
       setGridSizes('')
       setGridVariants([])
       setGridGenerated(false)
+      notify({
+        type: 'success',
+        title: 'Variants saved',
+        message: `${updated.length} total variants available for this product.`,
+      })
     } catch (err) {
       setError('Failed to save variants')
+      notify({ type: 'error', title: 'Could not save variants' })
     } finally {
       setSavingVariants(false)
     }
@@ -133,8 +145,11 @@ export default function Products() {
       setVariantsByProduct({ ...variantsByProduct, [product.id]: [] })
       setNewName(''); setNewPrice(''); setNewKeywords(''); setNewNotes('')
       setShowAddProduct(false)
+      notify({ type: 'success', title: 'Product added', message: product.name })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add product')
+      const message = err instanceof Error ? err.message : 'Failed to add product'
+      setError(message)
+      notify({ type: 'error', title: 'Could not add product', message })
     } finally {
       setAddingProduct(false)
     }
@@ -149,8 +164,11 @@ export default function Products() {
       const updated = { ...variantsByProduct }
       delete updated[id]
       setVariantsByProduct(updated)
+      notify({ type: 'success', title: 'Product deleted' })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete product')
+      const message = err instanceof Error ? err.message : 'Failed to delete product'
+      setError(message)
+      notify({ type: 'error', title: 'Could not delete product', message })
     }
   }
 
@@ -174,6 +192,7 @@ export default function Products() {
         )
       }))
       setError('Failed to update variant')
+      notify({ type: 'error', title: 'Could not update variant status' })
     }
   }
 
@@ -187,8 +206,13 @@ export default function Products() {
     }))
     try {
       await Promise.all(variants.map(v => api.updateVariant(v.id, available)))
+      notify({
+        type: 'success',
+        title: available ? 'All variants marked in stock' : 'All variants marked sold out',
+      })
     } catch (err) {
       setError('Failed to update variants')
+      notify({ type: 'error', title: 'Could not update all variants' })
       loadData()
     }
   }
@@ -214,12 +238,16 @@ export default function Products() {
     <div className="products-page">
       <div className="page-header">
         <h2>Products</h2>
-        <button onClick={() => setShowAddProduct(true)} className="btn-add">
+        <AppButton onClick={() => setShowAddProduct(true)} className="btn-add" variant="primary">
           + Add Product
-        </button>
+        </AppButton>
       </div>
 
-      {error && <div className="error-message">{error}</div>}
+      {error ? (
+        <AppAlert type="error" title="Product operation failed">
+          {error}
+        </AppAlert>
+      ) : null}
 
       {/* ── Add Product Modal ── */}
       {showAddProduct && (
@@ -280,16 +308,18 @@ export default function Products() {
             </div>
 
             <div className="modal-buttons">
-              <button onClick={() => setShowAddProduct(false)} className="btn-cancel">
+              <AppButton onClick={() => setShowAddProduct(false)} className="btn-cancel" variant="secondary">
                 Cancel
-              </button>
-              <button
+              </AppButton>
+              <AppButton
                 onClick={handleAddProduct}
                 className="btn-primary"
-                disabled={addingProduct || !newName.trim() || !newPrice}
+                disabled={!newName.trim() || !newPrice}
+                loading={addingProduct}
+                loadingText="Adding..."
               >
-                {addingProduct ? 'Adding...' : 'Add Product'}
-              </button>
+                Add Product
+              </AppButton>
             </div>
           </div>
         </div>
@@ -351,26 +381,20 @@ export default function Products() {
                     {/* Bulk actions */}
                     {variants.length > 0 && (
                       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                        <button
+                        <AppButton
                           onClick={() => handleMarkAll(product.id, true)}
-                          style={{
-                            fontSize: 12, padding: '5px 12px',
-                            borderRadius: 8, border: '0.5px solid #ccc',
-                            background: 'transparent', cursor: 'pointer'
-                          }}
+                          variant="secondary"
+                          size="sm"
                         >
                           Mark all in stock
-                        </button>
-                        <button
+                        </AppButton>
+                        <AppButton
                           onClick={() => handleMarkAll(product.id, false)}
-                          style={{
-                            fontSize: 12, padding: '5px 12px',
-                            borderRadius: 8, border: '0.5px solid #ccc',
-                            background: 'transparent', cursor: 'pointer'
-                          }}
+                          variant="secondary"
+                          size="sm"
                         >
                           Mark all sold out
-                        </button>
+                        </AppButton>
                       </div>
                     )}
 
@@ -478,24 +502,25 @@ export default function Products() {
                               />
                             </div>
                             <div style={{ display: 'flex', gap: 8 }}>
-                              <button
+                              <AppButton
                                 onClick={handleGenerateGrid}
                                 className="btn-primary"
                                 disabled={!gridColors.trim() || !gridSizes.trim()}
-                                style={{ fontSize: 13 }}
+                                size="sm"
                               >
                                 Generate grid
-                              </button>
-                              <button
+                              </AppButton>
+                              <AppButton
                                 onClick={() => {
                                   setShowVariantGrid(null)
                                   handleResetGrid()
                                 }}
                                 className="btn-cancel"
-                                style={{ fontSize: 13 }}
+                                variant="secondary"
+                                size="sm"
                               >
                                 Cancel
-                              </button>
+                              </AppButton>
                             </div>
                           </>
                         ) : (
@@ -507,26 +532,20 @@ export default function Products() {
 
                             {/* Bulk select for grid */}
                             <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                              <button
+                              <AppButton
                                 onClick={() => handleMarkAllGrid(true)}
-                                style={{
-                                  fontSize: 11, padding: '3px 10px',
-                                  borderRadius: 6, border: '0.5px solid #ccc',
-                                  background: 'transparent', cursor: 'pointer'
-                                }}
+                                variant="secondary"
+                                size="sm"
                               >
                                 Check all
-                              </button>
-                              <button
+                              </AppButton>
+                              <AppButton
                                 onClick={() => handleMarkAllGrid(false)}
-                                style={{
-                                  fontSize: 11, padding: '3px 10px',
-                                  borderRadius: 6, border: '0.5px solid #ccc',
-                                  background: 'transparent', cursor: 'pointer'
-                                }}
+                                variant="secondary"
+                                size="sm"
                               >
                                 Uncheck all
-                              </button>
+                              </AppButton>
                             </div>
 
                             {/* Grid */}
@@ -576,48 +595,51 @@ export default function Products() {
                             </div>
 
                             <div style={{ display: 'flex', gap: 8 }}>
-                              <button
+                              <AppButton
                                 onClick={() => handleSaveVariants(product.id)}
                                 className="btn-primary"
                                 disabled={savingVariants}
-                                style={{ fontSize: 13 }}
+                                size="sm"
+                                loading={savingVariants}
+                                loadingText="Saving..."
                               >
-                                {savingVariants
-                                  ? 'Saving...'
-                                  : `Save ${gridVariants.filter(v => v.available).length} variants`
-                                }
-                              </button>
-                              <button
+                                {`Save ${gridVariants.filter(v => v.available).length} variants`}
+                              </AppButton>
+                              <AppButton
                                 onClick={handleResetGrid}
                                 className="btn-cancel"
-                                style={{ fontSize: 13 }}
+                                variant="secondary"
+                                size="sm"
                               >
                                 Back
-                              </button>
+                              </AppButton>
                             </div>
                           </>
                         )}
                       </div>
                     ) : (
-                      <button
+                      <AppButton
                         onClick={() => {
                           setShowVariantGrid(product.id)
                           handleResetGrid()
                         }}
                         className="btn-add-small"
-                        style={{ marginBottom: 12, fontSize: 13 }}
+                        size="sm"
+                        style={{ marginBottom: 12 }}
                       >
                         + Add variants
-                      </button>
+                      </AppButton>
                     )}
 
                     {/* Delete product */}
-                    <button
+                    <AppButton
                       onClick={() => handleDeleteProduct(product.id)}
                       className="btn-delete-product"
+                      variant="danger"
+                      fullWidth
                     >
                       🗑 Delete Product
-                    </button>
+                    </AppButton>
                   </div>
                 )}
               </div>

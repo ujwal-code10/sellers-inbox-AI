@@ -25,7 +25,7 @@
 ## 🔄 This Week (In Order)
 - [*] Security audit (use prompt in PROMPT.md)
 - [*] Fix any HIGH severity issues from audit
-- [ ] Connect landing page with real Vercel URLs
+- [*] Connect landing page with real Vercel URLs
 - [ ] Message 20 Instagram sellers
 - [ ] Get 5 sellers to try the app
 

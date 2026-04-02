@@ -137,6 +137,35 @@ router.get("/me", auth, async (req: AuthRequest, res) => {
   }
 });
 
+router.patch("/me", auth, async (req: AuthRequest, res) => {
+  const { name } = req.body;
+
+  if (typeof name !== "string") {
+    return res.status(400).json({ error: "Name is required" });
+  }
+
+  const trimmedName = name.trim();
+  if (trimmedName.length === 0 || trimmedName.length > 100) {
+    return res.status(400).json({ error: "Name must be 1-100 characters" });
+  }
+
+  try {
+    const result = await pool.query(
+      "UPDATE users SET name = $1 WHERE id = $2 RETURNING id, name, email",
+      [trimmedName, req.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ user: result.rows[0] });
+  } catch (err: any) {
+    console.error("Update profile error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 
 
 export default router;
