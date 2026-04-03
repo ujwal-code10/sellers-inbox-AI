@@ -855,8 +855,10 @@ body {
   cursor: pointer;
 }
 
-.btn-add:hover {
-  background: #22c48e;
+.btn-add:hover,
+.btn-add.app-btn-primary:hover:not(:disabled) {
+  background: #1D9E75;
+  color: white;
 }
 
 /* Empty State */
@@ -1087,6 +1089,26 @@ body {
   color: #666;
 }
 
+.variants-section .form-group label {
+  color: #4b5a53;
+}
+
+.variants-section .form-group input:not([type="checkbox"]):not([type="radio"]) {
+  background: #ffffff;
+  color: #111827;
+  border: 1px solid #d4ddd8;
+}
+
+.variants-section .form-group input:not([type="checkbox"]):not([type="radio"]):focus {
+  background: #ffffff;
+  border-color: #1D9E75;
+  box-shadow: 0 0 0 3px rgba(29,158,117,0.1);
+}
+
+.variants-section .form-group input::placeholder {
+  color: #6b7280;
+}
+
 .btn-add-small {
   padding: 6px 12px;
   background: rgba(29,158,117,0.1);
@@ -1098,8 +1120,10 @@ body {
   cursor: pointer;
 }
 
-.btn-add-small:hover {
-  background: rgba(29,158,117,0.2);
+.btn-add-small:hover,
+.btn-add-small.app-btn-primary:hover:not(:disabled) {
+  background: rgba(29,158,117,0.1);
+  color: #1D9E75;
 }
 
 .add-variant-form {
