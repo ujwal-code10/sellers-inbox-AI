@@ -373,42 +373,6 @@ Location/Address:`
     })
     : 'Active'
 
-  const profileCardStyle = {
-    background: '#ffffff',
-    border: '1px solid #e4ebe7',
-    borderRadius: 12,
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
-    padding: '18px 18px 16px',
-  } as const
-
-  const profileSectionTitleStyle = {
-    fontSize: 11,
-    letterSpacing: '0.08em',
-    textTransform: 'uppercase',
-    color: '#6a7b73',
-    fontWeight: 700,
-    marginBottom: 14,
-  } as const
-
-  const profileRowStyle = {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 10,
-    fontSize: 14,
-  } as const
-
-  const profileLabelStyle = {
-    color: '#5f6f67',
-    fontWeight: 600,
-  } as const
-
-  const profileValueStyle = {
-    color: '#1d2e25',
-    fontWeight: 700,
-  } as const
-
   return (
     <div className="dashboard">
       {/* ── Paywall Modal ── */}
@@ -557,168 +521,180 @@ Location/Address:`
           <main className="dashboard-main">
             {/* Reply Tab */}
             {activeTab === 'reply' && (
-              <div className="reply-generator">
-                <div className="input-section">
-                  <label htmlFor="customerMessage">Customer Message</label>
-                  <textarea
-                    id="customerMessage"
-                    value={customerMessage}
-                    onChange={(e) => {
-                      setCustomerMessage(e.target.value)
-                      setShowProductPicker(false)
-                    }}
-                    placeholder="Paste customer message here...&#10;&#10;Example: Blue hoodie cha? Price kati ho?"
-                    rows={4}
-                  />
-                  <div className="button-row">
-                    <AppButton
-                      onClick={handleGenerate}
-                      className="btn-generate-modern"
-                      loading={loading}
-                      loadingText="Generating..."
-                      fullWidth
-                      leftIcon={<Zap className="app-icon-sm" />}
-                    >
-                      Generate Reply
-                    </AppButton>
-                    {(customerMessage || result) && (
-                      <AppButton onClick={handleClear} className="btn-clear-modern" variant="secondary">
-                        Clear
+              <section className="dashboard-tab-wrap dashboard-tab-wrap-reply">
+                <div className="reply-generator">
+                  <div className="input-section">
+                    <label htmlFor="customerMessage">Customer Message</label>
+                    <textarea
+                      id="customerMessage"
+                      value={customerMessage}
+                      onChange={(e) => {
+                        setCustomerMessage(e.target.value)
+                        setShowProductPicker(false)
+                      }}
+                      placeholder="Paste customer message here...&#10;&#10;Example: Blue hoodie cha? Price kati ho?"
+                      rows={4}
+                    />
+                    <div className="button-row">
+                      <AppButton
+                        onClick={handleGenerate}
+                        className="btn-generate-modern"
+                        loading={loading}
+                        loadingText="Generating..."
+                        fullWidth
+                        leftIcon={<Zap className="app-icon-sm" />}
+                      >
+                        Generate Reply
                       </AppButton>
-                    )}
-                  </div>
-                  <div className="reply-order-form-wrap">
-                    <AppButton
-                      onClick={handleCopyOrderForm}
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      leftIcon={<Copy06 className="app-icon-sm" />}
-                    >
-                      {orderFormCopied ? '✓ Copied!' : 'Copy order form'}
-                    </AppButton>
-                  </div>
-                </div>
-
-                {error ? (
-                  <AppAlert type="error" title="Could not generate reply">
-                    {error}
-                  </AppAlert>
-                ) : null}
-
-                {result && (
-                  <div className="results-section">
-                    <div className={`action-badge ${result.decision.action.toLowerCase()}`}>
-                      {result.decision.action === 'ASK'
-                        ? '❓ Clarification Needed'
-                        : '✅ Reply Suggestions'
-                      }
+                      {(customerMessage || result) && (
+                        <AppButton onClick={handleClear} className="btn-clear-modern" variant="secondary">
+                          Clear
+                        </AppButton>
+                      )}
                     </div>
-                    <div className="suggestions-list">
-                      {result.suggestions.map((suggestion, index) => (
-                        <div key={index} className="suggestion-card">
-                          <p className="suggestion-text">{suggestion}</p>
+                    <div className="reply-order-form-wrap">
+                      <AppButton
+                        onClick={handleCopyOrderForm}
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        leftIcon={<Copy06 className="app-icon-sm" />}
+                      >
+                        {orderFormCopied ? '✓ Copied!' : 'Copy order form'}
+                      </AppButton>
+                    </div>
+                  </div>
+
+                  {error ? (
+                    <AppAlert type="error" title="Could not generate reply">
+                      {error}
+                    </AppAlert>
+                  ) : null}
+
+                  {result && (
+                    <div className="results-section">
+                      <div className={`action-badge ${result.decision.action.toLowerCase()}`}>
+                        {result.decision.action === 'ASK'
+                          ? '❓ Clarification Needed'
+                          : '✅ Reply Suggestions'
+                        }
+                      </div>
+                      <div className="suggestions-list">
+                        {result.suggestions.map((suggestion, index) => (
+                          <div key={index} className="suggestion-card">
+                            <p className="suggestion-text">{suggestion}</p>
+                            <AppButton
+                              onClick={() => handleCopy(suggestion, index)}
+                              className="suggestion-copy-btn"
+                              variant="secondary"
+                              size="sm"
+                              leftIcon={<Copy06 className="app-icon-sm" />}
+                            >
+                              {copiedIndex === index ? '✓ Copied!' : '📋 Copy'}
+                            </AppButton>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Product Picker - shows when AI asks for clarification */}
+                      {showProductPicker && (
+                        <div className="product-picker">
+                          <div className="product-picker-title">
+                            💡 Select the product you're asking about:
+                          </div>
+
+                          {/* Search input */}
+                          <input
+                            type="text"
+                            placeholder="Search product..."
+                            value={productSearch}
+                            onChange={(e) => setProductSearch(e.target.value)}
+                            className="product-picker-search"
+                          />
+
+                          {/* Product chips */}
+                          {filteredProducts.length > 0 ? (
+                            <div className="product-chip-grid">
+                              {filteredProducts.map((product) => (
+                                <button
+                                  key={product.id}
+                                  onClick={() => handleProductSelect(product.name)}
+                                  className="product-chip-btn"
+                                >
+                                  {product.name}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="product-picker-empty">
+                              {productSearch ? 'No products found matching your search.' : 'Add products first to use this feature.'}
+                            </div>
+                          )}
+
                           <AppButton
-                            onClick={() => handleCopy(suggestion, index)}
-                            className="suggestion-copy-btn"
+                            onClick={() => {
+                              setShowProductPicker(false)
+                              setProductSearch('')
+                            }}
                             variant="secondary"
                             size="sm"
-                            leftIcon={<Copy06 className="app-icon-sm" />}
+                            className="product-picker-cancel"
                           >
-                            {copiedIndex === index ? '✓ Copied!' : '📋 Copy'}
+                            Cancel
                           </AppButton>
                         </div>
-                      ))}
-                    </div>
+                      )}
 
-                    {/* Product Picker - shows when AI asks for clarification */}
-                    {showProductPicker && (
-                      <div className="product-picker">
-                        <div className="product-picker-title">
-                          💡 Select the product you're asking about:
+                      {result.decision.action === 'REPLY' && result.decision.matchedProduct && (
+                        <div className="debug-info">
+                          <span>Product: {result.decision.matchedProduct}</span>
+                          <span>Intent: {result.decision.intent}</span>
                         </div>
-
-                        {/* Search input */}
-                        <input
-                          type="text"
-                          placeholder="Search product..."
-                          value={productSearch}
-                          onChange={(e) => setProductSearch(e.target.value)}
-                          className="product-picker-search"
-                        />
-
-                        {/* Product chips */}
-                        {filteredProducts.length > 0 ? (
-                          <div className="product-chip-grid">
-                            {filteredProducts.map((product) => (
-                              <button
-                                key={product.id}
-                                onClick={() => handleProductSelect(product.name)}
-                                className="product-chip-btn"
-                              >
-                                {product.name}
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="product-picker-empty">
-                            {productSearch ? 'No products found matching your search.' : 'Add products first to use this feature.'}
-                          </div>
-                        )}
-
-                        <AppButton
-                          onClick={() => {
-                            setShowProductPicker(false)
-                            setProductSearch('')
-                          }}
-                          variant="secondary"
-                          size="sm"
-                          className="product-picker-cancel"
-                        >
-                          Cancel
-                        </AppButton>
-                      </div>
-                    )}
-
-                    {result.decision.action === 'REPLY' && result.decision.matchedProduct && (
-                      <div className="debug-info">
-                        <span>Product: {result.decision.matchedProduct}</span>
-                        <span>Intent: {result.decision.intent}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </section>
             )}
 
-            {activeTab === 'products' && <Products />}
-            {activeTab === 'delivery' && <DeliveryZones />}
+            {activeTab === 'products' && (
+              <section className="dashboard-tab-wrap">
+                <div className="dashboard-tab-surface">
+                  <Products />
+                </div>
+              </section>
+            )}
+            {activeTab === 'delivery' && (
+              <section className="dashboard-tab-wrap">
+                <div className="dashboard-tab-surface">
+                  <DeliveryZones />
+                </div>
+              </section>
+            )}
             {activeTab === 'payment' && (
-              <div className="payment-tab-wrap">
-                <Upgrade />
-              </div>
+              <section className="dashboard-tab-wrap">
+                <div className="payment-tab-wrap">
+                  <Upgrade />
+                </div>
+              </section>
             )}
             {activeTab === 'profile' && (
-              <div style={{ width: '100%', maxWidth: 760, display: 'grid', gap: 14 }}>
-                <section style={profileCardStyle}>
-                  <p style={profileSectionTitleStyle}>👤 Account</p>
+              <section className="dashboard-tab-wrap">
+                <div className="profile-layout">
+                  <section className="profile-card">
+                    <p className="profile-card-title">👤 Account</p>
 
-                  <div style={profileRowStyle}>
-                    <span style={profileLabelStyle}>Name</span>
+                    <div className="profile-row">
+                      <span className="profile-label">Name</span>
+                      
+                      
                     {editingName ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <div className="profile-name-editor">
                         <input
                           type="text"
                           value={nameDraft}
                           onChange={(e) => setNameDraft(e.target.value)}
-                          style={{
-                            minWidth: 180,
-                            maxWidth: '100%',
-                            padding: '8px 10px',
-                            borderRadius: 8,
-                            border: '1px solid #cdd8d2',
-                            fontSize: 14,
-                          }}
+                          className="profile-name-input"
                           aria-label="Edit account name"
                         />
                         <AppButton
@@ -741,26 +717,15 @@ Location/Address:`
                         </AppButton>
                       </div>
                     ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={profileValueStyle}>{profileName || 'Seller'}</span>
+                      <div className="profile-name-view">
+                        <span className="profile-value">{profileName || 'Seller'}</span>
                         <button
                           type="button"
                           onClick={() => {
                             setNameDraft(profileName)
                             setEditingName(true)
                           }}
-                          style={{
-                            width: 28,
-                            height: 28,
-                            borderRadius: 7,
-                            border: '1px solid #d3ddd8',
-                            background: '#ffffff',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            color: '#4f6258',
-                          }}
+                          className="profile-edit-btn"
                           aria-label="Edit name"
                         >
                           <Edit03 className="app-icon-sm" />
@@ -769,20 +734,20 @@ Location/Address:`
                     )}
                   </div>
 
-                  <div style={{ ...profileRowStyle, marginBottom: 0 }}>
-                    <span style={profileLabelStyle}>Email</span>
-                    <span style={profileValueStyle}>{user?.email ?? 'No email found'}</span>
+                  <div className="profile-row profile-row-last">
+                    <span className="profile-label">Email</span>
+                    <span className="profile-value">{user?.email ?? 'No email found'}</span>
                   </div>
-                </section>
+                  </section>
 
-                <section style={profileCardStyle}>
-                  <p style={profileSectionTitleStyle}>⚡ Your Plan</p>
+                  <section className="profile-card">
+                    <p className="profile-card-title">⚡ Your Plan</p>
 
                   {planLoading ? (
-                    <div style={{ color: '#586a61', fontSize: 14 }}>Loading plan details...</div>
+                    <div className="profile-plan-empty">Loading plan details...</div>
                   ) : !planData ? (
-                    <div>
-                      <div style={{ color: '#586a61', fontSize: 14, marginBottom: 10 }}>
+                    <div className="profile-plan-empty-wrap">
+                      <div className="profile-plan-empty">
                         Plan details are unavailable right now.
                       </div>
                       <AppButton onClick={loadPlanData} variant="secondary" size="sm">
@@ -791,17 +756,17 @@ Location/Address:`
                     </div>
                   ) : planData?.current.plan === 'pro' ? (
                     <>
-                      <div style={profileRowStyle}>
-                        <span style={profileLabelStyle}>Plan</span>
-                        <span style={profileValueStyle}>PRO ✓</span>
+                      <div className="profile-row">
+                        <span className="profile-label">Plan</span>
+                        <span className="profile-value">PRO ✓</span>
                       </div>
-                      <div style={profileRowStyle}>
-                        <span style={profileLabelStyle}>Replies</span>
-                        <span style={profileValueStyle}>Unlimited</span>
+                      <div className="profile-row">
+                        <span className="profile-label">Replies</span>
+                        <span className="profile-value">Unlimited</span>
                       </div>
-                      <div style={{ ...profileRowStyle, marginBottom: 14 }}>
-                        <span style={profileLabelStyle}>Expires</span>
-                        <span style={profileValueStyle}>{proExpiryLabel}</span>
+                      <div className="profile-row profile-row-gap">
+                        <span className="profile-label">Expires</span>
+                        <span className="profile-value">{proExpiryLabel}</span>
                       </div>
                       <AppButton
                         onClick={() => navigate('/upgrade')}
@@ -813,40 +778,28 @@ Location/Address:`
                     </>
                   ) : (
                     <>
-                      <div style={profileRowStyle}>
-                        <span style={profileLabelStyle}>Plan</span>
-                        <span style={profileValueStyle}>FREE</span>
+                      <div className="profile-row">
+                        <span className="profile-label">Plan</span>
+                        <span className="profile-value">FREE</span>
                       </div>
-                      <div style={{ ...profileRowStyle, marginBottom: 8 }}>
-                        <span style={profileLabelStyle}>Replies today</span>
-                        <span style={profileValueStyle}>
+                      <div className="profile-row profile-row-tight">
+                        <span className="profile-label">Replies today</span>
+                        <span className="profile-value">
                           {repliesToday} / {repliesLimit ?? '∞'}
                         </span>
                       </div>
 
-                      <div
-                        style={{
-                          height: 6,
-                          width: '100%',
-                          background: '#e5ebe7',
-                          borderRadius: 3,
-                          overflow: 'hidden',
-                          marginBottom: 8,
-                        }}
-                        aria-label="Replies usage progress"
-                      >
+                      <div className="profile-progress-track" aria-label="Replies usage progress">
                         <div
+                          className="profile-progress-fill"
                           style={{
                             width: `${repliesProgressPercent}%`,
-                            height: '100%',
                             background: repliesProgressColor,
-                            borderRadius: 3,
-                            transition: 'width 220ms ease',
                           }}
                         />
                       </div>
 
-                      <div style={{ color: '#5e7067', fontSize: 12, marginBottom: 14 }}>
+                      <div className="profile-progress-meta">
                         {repliesProgressPercent}% used
                       </div>
 
@@ -859,20 +812,21 @@ Location/Address:`
                       </AppButton>
                     </>
                   )}
-                </section>
+                  </section>
 
-                <section style={profileCardStyle}>
-                  <p style={profileSectionTitleStyle}>Account Actions</p>
-                  <AppButton
-                    onClick={logout}
-                    variant="danger"
-                    size="sm"
-                    leftIcon={<LogOut01 className="app-icon-sm" />}
-                  >
-                    → Logout
-                  </AppButton>
-                </section>
-              </div>
+                  <section className="profile-card">
+                    <p className="profile-card-title">Account Actions</p>
+                    <AppButton
+                      onClick={logout}
+                      variant="danger"
+                      size="sm"
+                      leftIcon={<LogOut01 className="app-icon-sm" />}
+                    >
+                      → Logout
+                    </AppButton>
+                  </section>
+                </div>
+              </section>
             )}
           </main>
         </section>

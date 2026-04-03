@@ -1,8 +1,6 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 // Validate required environment variables at startup
 const requiredEnvVars = ['JWT_SECRET', 'GROQ_API_KEY', 'DATABASE_URL'];

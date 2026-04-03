@@ -1,82 +1,110 @@
-import { useState, useEffect } from 'react'
-import { api } from '../services/api'
+import { useEffect, useState } from 'react'
+import { api, type PlanResponse, type ManualQrConfigResponse, type BillingCycle } from '../services/api'
 
-interface PlanData {
-  current: {
-    plan: string
-    billing: string | null
-    status: string
-    expires_at: string | null
+function normalizeQrImageUrl(rawUrl?: string | null): string | null {
+  if (!rawUrl) return null
+
+  const trimmed = rawUrl.trim()
+  if (!trimmed) return null
+
+  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('data:')) {
+    return trimmed
   }
-  usage: {
-    replies_today: number
-    replies_limit: number | null
-    products: number
-    products_limit: number | null
-  }
-  plans: {
-    free: { price: number; replies_per_day: number; products: number }
-    pro_monthly: { price: number; replies_per_day: null; products: null }
-    pro_yearly: { price: number; replies_per_day: null; products: null }
-  }
+
+  const normalizedPath = trimmed
+    .replace(/^\.\//, '')
+    .replace(/^public\//i, '')
+    .replace(/^\/+/, '')
+
+  return normalizedPath ? `/${normalizedPath}` : null
 }
 
 export default function Upgrade() {
-  const [planData, setPlanData] = useState<PlanData | null>(null)
+  const [planData, setPlanData] = useState<PlanResponse | null>(null)
+  const [qrConfig, setQrConfig] = useState<ManualQrConfigResponse | null>(null)
   const [loading, setLoading] = useState(true)
-  const [initiating, setInitiating] = useState(false)
-  const [selectedBilling, setSelectedBilling] = useState<'monthly' | 'yearly'>('monthly')
+  const [submittingQr, setSubmittingQr] = useState(false)
+  const [selectedBilling, setSelectedBilling] = useState<BillingCycle>('monthly')
+  const [paymentReference, setPaymentReference] = useState('')
+  const [payerName, setPayerName] = useState('')
+  const [manualNote, setManualNote] = useState('')
+  const [manualSuccess, setManualSuccess] = useState<{
+    transactionId: number
+    amount: number
+    message: string
+  } | null>(null)
+  const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => { loadPlans() }, [])
 
   const loadPlans = async () => {
+    setErrorMessage('')
     try {
-      const data = await api.getPlans()
+      const [data, config] = await Promise.all([
+        api.getPlans(),
+        api.getManualQrConfig(),
+      ])
+
       setPlanData(data)
+      setQrConfig(config)
     } catch (err) {
-      console.error(err)
+      const message = err instanceof Error ? err.message : 'Could not load payment options'
+      setErrorMessage(message)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleUpgrade = async () => {
-    setInitiating(true)
+  const handleSubmitManualQr = async () => {
+    const reference = paymentReference.trim()
+    const payer = payerName.trim()
+
+    if (!reference) {
+      setErrorMessage('Please enter your payment reference ID.')
+      return
+    }
+
+    if (payer.length < 2) {
+      setErrorMessage('Please enter payer name used in the wallet payment.')
+      return
+    }
+
+    if (reference.length < 4 || reference.length > 80) {
+      setErrorMessage('Payment reference must be between 4 and 80 characters.')
+      return
+    }
+
+    setSubmittingQr(true)
+    setErrorMessage('')
     try {
-      const data = await api.initiateEsewa(selectedBilling)
-
-      // Build and submit eSewa form
-      const form = document.createElement('form')
-      form.method = 'POST'
-      form.action = data.esewaUrl
-
-      const fields = {
-        amount: data.amount,
-        tax_amount: 0,
-        total_amount: data.amount,
-        transaction_uuid: data.transactionUuid,
-        product_code: data.productCode,
-        product_service_charge: 0,
-        product_delivery_charge: 0,
-        success_url: data.successUrl,
-        failure_url: data.failureUrl,
-        signed_field_names: 'total_amount,transaction_uuid,product_code',
-        signature: data.signature,
-      }
-
-      Object.entries(fields).forEach(([key, value]) => {
-        const input = document.createElement('input')
-        input.type = 'hidden'
-        input.name = key
-        input.value = String(value)
-        form.appendChild(input)
+      const result = await api.submitManualQrPayment({
+        billing: selectedBilling,
+        paymentReference: reference,
+        payerName: payer,
+        note: manualNote.trim() || undefined,
       })
 
-      document.body.appendChild(form)
-      form.submit()
+      setManualSuccess({
+        transactionId: result.transaction_id,
+        amount: result.amount,
+        message: result.message,
+      })
+      setPaymentReference('')
+      setPayerName('')
+      setManualNote('')
     } catch (err) {
-      console.error(err)
-      setInitiating(false)
+      const message = err instanceof Error ? err.message : 'Failed to submit QR payment'
+      setErrorMessage(message)
+    } finally {
+      setSubmittingQr(false)
+    }
+  }
+
+  const handleCopy = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+    } catch {
+      // no-op fallback for older browsers
     }
   }
 
@@ -87,28 +115,47 @@ export default function Upgrade() {
   )
 
   const isPro = planData?.current.plan === 'pro'
+  const selectedAmount = selectedBilling === 'yearly'
+    ? (qrConfig?.amounts.yearly ?? planData?.plans.pro_yearly.price ?? 2499)
+    : (qrConfig?.amounts.monthly ?? planData?.plans.pro_monthly.price ?? 299)
+  const qrImageUrl = normalizeQrImageUrl(qrConfig?.qr_image_url)
 
   return (
-    <div style={{ maxWidth: 560, margin: '0 auto', padding: '2rem 1rem' }}>
+    <div style={{ maxWidth: 760, margin: '0 auto', padding: '2rem 1rem' }}>
       <h2 style={{ marginBottom: 4 }}>Upgrade to Pro</h2>
       <p style={{ color: '#666', marginBottom: 20, fontSize: 14 }}>
         Remove limits and reply to unlimited customers
       </p>
 
-      {/* eSewa Testing Banner */}
+      {errorMessage ? (
+        <div style={{
+          background: '#fff1f2',
+          border: '1px solid #fecdd3',
+          color: '#9f1239',
+          borderRadius: 10,
+          padding: '10px 12px',
+          marginBottom: 16,
+          fontSize: 13,
+          fontWeight: 600,
+        }}>
+          {errorMessage}
+        </div>
+      ) : null}
+
+      {/* Payment note */}
       <div style={{
-        background: '#FEF3C7',
-        border: '1px solid #F59E0B',
+        background: '#ecfdf3',
+        border: '1px solid #b7e8cc',
         borderRadius: 10,
         padding: '12px 16px',
         marginBottom: 24,
         textAlign: 'center'
       }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#92400E', marginBottom: 4 }}>
-          ⚠️ Payment Testing Mode
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#085f46', marginBottom: 4 }}>
+          Manual QR payment only
         </div>
-        <div style={{ fontSize: 12, color: '#92400E' }}>
-          Live payments coming soon! Current payments won't charge real money.
+        <div style={{ fontSize: 12, color: '#347763' }}>
+          Transfer via QR and submit your reference for fast verification.
         </div>
       </div>
 
@@ -251,29 +298,182 @@ export default function Upgrade() {
             </div>
           </div>
 
-          {/* eSewa Button */}
-          <button
-            onClick={handleUpgrade}
-            disabled={initiating}
-            style={{
-              width: '100%', padding: '14px 0',
-              borderRadius: 12, border: 'none',
-              background: initiating ? '#ccc' : '#60BB46',
-              color: '#fff', fontWeight: 700,
-              fontSize: 15, cursor: initiating ? 'not-allowed' : 'pointer'
-            }}
-          >
-            {initiating
-              ? 'Redirecting to eSewa...'
-              : `Pay with eSewa — Rs. ${selectedBilling === 'yearly' ? '2,499' : '299'}`
-            }
-          </button>
-
           <div style={{
-            textAlign: 'center', fontSize: 11,
-            color: '#888', marginTop: 10
+            border: '1px solid #dbe7e1',
+            borderRadius: 14,
+            padding: 16,
+            background: '#fbfffd',
           }}>
-            Secure payment via eSewa • Cancel anytime
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#153126' }}>Manual QR payment</div>
+                <div style={{ fontSize: 13, color: '#4f655c', marginTop: 3 }}>
+                  Transfer exactly Rs. {selectedAmount.toLocaleString()} and submit the payment reference below.
+                </div>
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#1d9e75' }}>
+                Amount: Rs. {selectedAmount.toLocaleString()}
+              </div>
+            </div>
+
+            {qrImageUrl ? (
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+                <img
+                  src={qrImageUrl}
+                  alt="Manual QR payment"
+                  style={{
+                    width: '100%',
+                    maxWidth: 240,
+                    aspectRatio: '1 / 1',
+                    objectFit: 'cover',
+                    borderRadius: 12,
+                    border: '1px solid #d5e2dc',
+                    background: '#fff',
+                    padding: 8,
+                  }}
+                />
+              </div>
+            ) : (
+              <div style={{
+                border: '1px dashed #c8d8d1',
+                borderRadius: 12,
+                padding: '18px 12px',
+                textAlign: 'center',
+                fontSize: 13,
+                color: '#667a71',
+                marginBottom: 14,
+              }}>
+                QR image not available. Set MANUAL_QR_IMAGE_URL to /qr.jpeg or a full https URL.
+              </div>
+            )}
+
+            <div style={{
+              border: '1px solid #deebe5',
+              borderRadius: 10,
+              background: '#fff',
+              padding: 12,
+              marginBottom: 14,
+              display: 'grid',
+              gap: 6,
+            }}>
+              <div style={{ fontSize: 13 }}><strong>Receiver:</strong> {qrConfig?.receiver_name || 'Seller Inbox AI'}</div>
+              <div style={{ fontSize: 13 }}><strong>Wallet/ID:</strong> {qrConfig?.receiver_id || '-'}</div>
+              <button
+                type="button"
+                onClick={() => handleCopy(qrConfig?.receiver_id || '')}
+                style={{
+                  marginTop: 2,
+                  justifySelf: 'start',
+                  border: '1px solid #d8e2dd',
+                  background: '#f7fbf9',
+                  color: '#27473b',
+                  borderRadius: 8,
+                  padding: '6px 10px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Copy receiver ID
+              </button>
+            </div>
+
+            <div style={{ fontSize: 12, color: '#5d7268', marginBottom: 8 }}>
+              1. Scan QR and send payment.
+            </div>
+            <div style={{ fontSize: 12, color: '#5d7268', marginBottom: 8 }}>
+              2. Enter payment reference from your wallet app.
+            </div>
+            <div style={{ fontSize: 12, color: '#5d7268', marginBottom: 14 }}>
+              3. Submit and wait for verification.
+            </div>
+
+            <div style={{ display: 'grid', gap: 10 }}>
+              <input
+                type="text"
+                placeholder="Payment reference ID (required)"
+                value={paymentReference}
+                onChange={(e) => setPaymentReference(e.target.value)}
+                style={{
+                  width: '100%',
+                  border: '1px solid #d5e1dc',
+                  borderRadius: 10,
+                  padding: '10px 12px',
+                  fontSize: 14,
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Payer name (required)"
+                value={payerName}
+                onChange={(e) => setPayerName(e.target.value)}
+                style={{
+                  width: '100%',
+                  border: '1px solid #d5e1dc',
+                  borderRadius: 10,
+                  padding: '10px 12px',
+                  fontSize: 14,
+                }}
+              />
+              <textarea
+                placeholder="Note (optional)"
+                value={manualNote}
+                onChange={(e) => setManualNote(e.target.value)}
+                rows={3}
+                style={{
+                  width: '100%',
+                  border: '1px solid #d5e1dc',
+                  borderRadius: 10,
+                  padding: '10px 12px',
+                  fontSize: 14,
+                  resize: 'vertical',
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={handleSubmitManualQr}
+                disabled={submittingQr}
+                style={{
+                  width: '100%',
+                  padding: '13px 0',
+                  borderRadius: 12,
+                  border: 'none',
+                  background: submittingQr ? '#c8cecb' : '#1D9E75',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: submittingQr ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {submittingQr ? 'Submitting...' : 'Submit for verification'}
+              </button>
+            </div>
+
+            {manualSuccess ? (
+              <div style={{
+                marginTop: 14,
+                borderRadius: 10,
+                border: '1px solid #bce8d8',
+                background: '#ecfdf5',
+                padding: '10px 12px',
+                color: '#0f5132',
+                fontSize: 13,
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>Submitted successfully</div>
+                <div>{manualSuccess.message}</div>
+                <div style={{ marginTop: 5 }}>
+                  Request ID: #{manualSuccess.transactionId} • Amount: Rs. {manualSuccess.amount.toLocaleString()}
+                </div>
+                  <div style={{ marginTop: 6, fontWeight: 700 }}>
+                    Your plan stays Free until admin approves this request.
+                  </div>
+              </div>
+            ) : null}
+
+            <div style={{ fontSize: 12, color: '#6f8178', marginTop: 12 }}>
+              {qrConfig?.support_text || 'After submitting, our team verifies your payment and activates Pro.'}
+            </div>
           </div>
         </>
       )}

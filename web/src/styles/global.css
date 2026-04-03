@@ -1740,6 +1740,35 @@ body {
   padding: 0;
 }
 
+.dashboard-tab-wrap {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  animation: fadeSlideIn 0.35s ease;
+}
+
+.dashboard-tab-wrap-reply {
+  max-width: 900px;
+}
+
+.dashboard-tab-surface {
+  width: 100%;
+  border: 1px solid var(--dash-border);
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: var(--dash-shadow);
+  padding: 18px;
+}
+
+.dashboard-tab-surface .products-page,
+.dashboard-tab-surface .delivery-page {
+  max-width: 100%;
+}
+
+.dashboard-tab-surface .page-header {
+  margin-bottom: 18px;
+}
+
 .reply-generator {
   max-width: 780px;
   animation: fadeSlideIn 0.45s ease;
@@ -1751,7 +1780,8 @@ body {
 }
 
 .payment-tab-wrap {
-  max-width: 760px;
+  width: 100%;
+  max-width: 980px;
   border: 1px solid var(--dash-border);
   border-radius: 18px;
   background: #ffffff;
@@ -1762,6 +1792,139 @@ body {
 
 .payment-tab-wrap > div {
   max-width: 100% !important;
+}
+
+.profile-layout {
+  width: 100%;
+  max-width: 840px;
+  display: grid;
+  gap: 14px;
+}
+
+.profile-card {
+  background: #ffffff;
+  border: 1px solid #e4ebe7;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  padding: 18px 18px 16px;
+}
+
+.profile-card-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6a7b73;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+.profile-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.profile-row-last {
+  margin-bottom: 0;
+}
+
+.profile-row-tight {
+  margin-bottom: 8px;
+}
+
+.profile-row-gap {
+  margin-bottom: 14px;
+}
+
+.profile-label {
+  color: #5f6f67;
+  font-weight: 600;
+}
+
+.profile-value {
+  color: #1d2e25;
+  font-weight: 700;
+}
+
+.profile-name-view {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-name-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.profile-name-input {
+  min-width: 180px;
+  max-width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #cdd8d2;
+  font-size: 14px;
+}
+
+.profile-name-input:focus {
+  outline: none;
+  border-color: var(--app-accent);
+  box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.14);
+}
+
+.profile-edit-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid #d3ddd8;
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #4f6258;
+}
+
+.profile-edit-btn:hover {
+  background: #f5faf7;
+  border-color: #bfd4cb;
+}
+
+.profile-progress-track {
+  height: 6px;
+  width: 100%;
+  background: #e5ebe7;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.profile-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 220ms ease;
+}
+
+.profile-progress-meta {
+  color: #5e7067;
+  font-size: 12px;
+  margin-bottom: 14px;
+}
+
+.profile-plan-empty-wrap {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-plan-empty {
+  color: #586a61;
+  font-size: 14px;
 }
 
 .dashboard-mobile-nav {
@@ -1791,6 +1954,10 @@ body {
     padding: 14px 12px 98px;
   }
 
+  .dashboard-tab-surface {
+    padding: 14px;
+  }
+
   .dashboard-content-head {
     padding: 16px;
     border-radius: 16px;
@@ -1814,6 +1981,23 @@ body {
   .products-page,
   .delivery-page {
     max-width: 100%;
+  }
+
+  .profile-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .profile-name-view,
+  .profile-name-editor {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .profile-name-input {
+    width: 100%;
+    min-width: 0;
   }
 
   .button-row {

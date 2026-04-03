@@ -19,6 +19,49 @@ const PLAN_PRICES = {
   pro_yearly: 2499,
 };
 
+function normalizeManualQrImageUrl(rawUrl?: string | null): string | null {
+  if (!rawUrl) {
+    return null;
+  }
+
+  const trimmed = rawUrl.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith("data:")) {
+    return trimmed;
+  }
+
+  const sanitizedPath = trimmed
+    .replace(/^\.\//, "")
+    .replace(/^public\//i, "")
+    .replace(/^\/+/, "");
+
+  if (!sanitizedPath) {
+    return null;
+  }
+
+  return `/${sanitizedPath}`;
+}
+
+const MANUAL_QR_IMAGE_URL = normalizeManualQrImageUrl(
+  process.env.MANUAL_QR_IMAGE_URL || null
+);
+const MANUAL_QR_RECEIVER_NAME =
+  process.env.MANUAL_QR_RECEIVER_NAME || "Seller Inbox AI";
+const MANUAL_QR_RECEIVER_ID =
+  process.env.MANUAL_QR_RECEIVER_ID || "Configure MANUAL_QR_RECEIVER_ID";
+const MANUAL_QR_SUPPORT_TEXT =
+  process.env.MANUAL_QR_SUPPORT_TEXT ||
+  "Submit your payment reference after transfer. Our team verifies and activates Pro quickly.";
+
+type BillingCycle = "monthly" | "yearly";
+
+function getPlanAmount(billing: BillingCycle): number {
+  return billing === "yearly" ? PLAN_PRICES.pro_yearly : PLAN_PRICES.pro_monthly;
+}
+
 // Generate HMAC-SHA256 signature for eSewa
 function generateSignature(message: string, secret: string): string {
   return crypto
@@ -82,6 +125,143 @@ router.get("/plans", auth, async (req: AuthRequest, res) => {
 });
 
 /**
+ * GET /api/payments/manual-qr/config
+ * Returns manual QR payment configuration
+ */
+router.get("/manual-qr/config", auth, async (_req: AuthRequest, res) => {
+  res.json({
+    enabled: Boolean(MANUAL_QR_IMAGE_URL),
+    qr_image_url: MANUAL_QR_IMAGE_URL,
+    receiver_name: MANUAL_QR_RECEIVER_NAME,
+    receiver_id: MANUAL_QR_RECEIVER_ID,
+    support_text: MANUAL_QR_SUPPORT_TEXT,
+    amounts: {
+      monthly: PLAN_PRICES.pro_monthly,
+      yearly: PLAN_PRICES.pro_yearly,
+    },
+  });
+});
+
+/**
+ * POST /api/payments/manual-qr/submit
+ * Submits manual QR payment reference for verification
+ */
+router.post("/manual-qr/submit", auth, async (req: AuthRequest, res) => {
+  const { billing, paymentReference, payerName, note } = req.body as {
+    billing?: BillingCycle;
+    paymentReference?: string;
+    payerName?: string;
+    note?: string;
+  };
+
+  if (!billing || !["monthly", "yearly"].includes(billing)) {
+    return res.status(400).json({ error: "billing must be monthly or yearly" });
+  }
+
+  if (typeof paymentReference !== "string") {
+    return res.status(400).json({ error: "paymentReference is required" });
+  }
+
+  const cleanedReference = paymentReference.trim();
+  if (cleanedReference.length < 4 || cleanedReference.length > 80) {
+    return res
+      .status(400)
+      .json({ error: "paymentReference must be 4-80 characters" });
+  }
+
+  if (!/^[a-zA-Z0-9/_-]+$/.test(cleanedReference)) {
+    return res.status(400).json({
+      error:
+        "paymentReference can only contain letters, numbers, slash, underscore, or dash",
+    });
+  }
+
+  if (typeof payerName !== "string" || payerName.trim().length < 2) {
+    return res.status(400).json({
+      error: "payerName is required for verification",
+    });
+  }
+
+  const cleanedPayerName = payerName.trim().slice(0, 120);
+
+  const cleanedNote =
+    typeof note === "string" && note.trim() ? note.trim().slice(0, 300) : null;
+
+  try {
+    // Prevent duplicate reference submissions.
+    const duplicateRef = await pool.query(
+      `SELECT id FROM transactions
+       WHERE payment_method = 'manual_qr' AND payment_ref = $1
+       LIMIT 1`,
+      [cleanedReference]
+    );
+
+    if (duplicateRef.rows.length > 0) {
+      return res.status(409).json({
+        error:
+          "This payment reference is already submitted. Please verify the reference and try again.",
+      });
+    }
+
+    // Allow one pending manual subscription request per user at a time.
+    const existingPending = await pool.query(
+      `SELECT id FROM transactions
+       WHERE user_id = $1
+         AND type = 'subscription'
+         AND payment_method = 'manual_qr'
+         AND status = 'pending'
+       LIMIT 1`,
+      [req.userId]
+    );
+
+    if (existingPending.rows.length > 0) {
+      return res.status(409).json({
+        error:
+          "You already have a pending QR payment request. Please wait for verification.",
+      });
+    }
+
+    const amount = getPlanAmount(billing);
+    const metadata = {
+      billing,
+      payer_name: cleanedPayerName,
+      note: cleanedNote,
+      submitted_at: new Date().toISOString(),
+      source: "manual_qr",
+    };
+
+    const created = await pool.query(
+      `INSERT INTO transactions
+        (user_id, type, amount, currency, status, payment_method, payment_ref, metadata)
+       VALUES ($1, 'subscription', $2, 'NPR', 'pending', 'manual_qr', $3, $4::jsonb)
+       RETURNING id`,
+      [req.userId, amount, cleanedReference, JSON.stringify(metadata)]
+    );
+
+    return res.status(201).json({
+      success: true,
+      status: "pending_review",
+      transaction_id: created.rows[0].id,
+      amount,
+      requires_admin_approval: true,
+      access_activated: false,
+      message:
+        "Payment request submitted. Pro access will activate only after admin verification.",
+    });
+  } catch (err: any) {
+    if (err.code === "42P01") {
+      return res.status(503).json({
+        error:
+          "Manual QR payments are not configured yet on the server. Please contact support.",
+      });
+    }
+
+    console.error("Manual QR submit error:", err);
+    return res.status(500).json({ error: "Could not submit payment" });
+  }
+});
+
+/**
  * POST /api/payments/esewa/initiate
  * Returns eSewa payment form data
  */
@@ -92,10 +272,7 @@ router.post("/esewa/initiate", auth, async (req: AuthRequest, res) => {
     return res.status(400).json({ error: "billing must be monthly or yearly" });
   }
 
-  const amount =
-    billing === "yearly"
-      ? PLAN_PRICES.pro_yearly
-      : PLAN_PRICES.pro_monthly;
+  const amount = getPlanAmount(billing as BillingCycle);
 
   const transactionUuid = `SIA-${req.userId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const productCode = ESEWA_MERCHANT_CODE;
@@ -149,9 +326,9 @@ router.post("/esewa/verify", auth, async (req: AuthRequest, res) => {
     } = decoded;
 
     // CRITICAL: Validate payment amount matches expected plan price
-    const expectedAmount = billing === 'yearly'
-      ? PLAN_PRICES.pro_yearly
-      : PLAN_PRICES.pro_monthly;
+    const expectedAmount = getPlanAmount(
+      (billing === "yearly" ? "yearly" : "monthly") as BillingCycle
+    );
 
     if (parseFloat(total_amount) !== expectedAmount) {
       console.error(`Payment amount mismatch: expected ${expectedAmount}, got ${total_amount}`);

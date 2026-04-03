@@ -8,6 +8,7 @@
  * All database setup is automatic - no manual SQL required.
  */
 
+import "dotenv/config";
 import { initializeDatabase } from "./utils/init.js";
 import app from "./app.js";
 

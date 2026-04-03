@@ -36,6 +36,30 @@ export interface PlanResponse {
   }
 }
 
+export type BillingCycle = 'monthly' | 'yearly'
+
+export interface ManualQrConfigResponse {
+  enabled: boolean
+  qr_image_url: string | null
+  receiver_name: string
+  receiver_id: string
+  support_text: string
+  amounts: {
+    monthly: number
+    yearly: number
+  }
+}
+
+export interface ManualQrSubmitResponse {
+  success: boolean
+  status: 'pending_review'
+  transaction_id: number
+  amount: number
+  requires_admin_approval?: boolean
+  access_activated?: boolean
+  message: string
+}
+
 export interface Product {
   id: number
   name: string
@@ -226,6 +250,22 @@ class ApiClient {
     return this.request('/payments/esewa/initiate', {
       method: 'POST',
       body: JSON.stringify({ billing }),
+    })
+  }
+
+  async getManualQrConfig(): Promise<ManualQrConfigResponse> {
+    return this.request<ManualQrConfigResponse>('/payments/manual-qr/config')
+  }
+
+  async submitManualQrPayment(payload: {
+    billing: BillingCycle
+    paymentReference: string
+    payerName?: string
+    note?: string
+  }): Promise<ManualQrSubmitResponse> {
+    return this.request<ManualQrSubmitResponse>('/payments/manual-qr/submit', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     })
   }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AdminLayout } from '../components/layout/AdminLayout';
 import { adminApi, Transaction, PaginatedResponse } from '../services/adminApi';
 import { useToast } from '../context/ToastContext';
@@ -7,17 +7,19 @@ import '../styles/admin.css';
 export function Transactions() {
   const [data, setData] = useState<PaginatedResponse<Transaction> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [status, setStatus] = useState('');
   const [type, setType] = useState('');
   const [page, setPage] = useState(1);
+  const [approveTarget, setApproveTarget] = useState<Transaction | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<Transaction | null>(null);
+  const [reviewReason, setReviewReason] = useState('');
   const { addToast } = useToast();
 
-  useEffect(() => {
-    loadTransactions();
-  }, [page, status, type]);
-
-  const loadTransactions = async () => {
-    setLoading(true);
+  const loadTransactions = useCallback(async (showLoader: boolean = true) => {
+    if (showLoader) {
+      setLoading(true);
+    }
     try {
       const result = await adminApi.getTransactions({
         page,
@@ -29,9 +31,23 @@ export function Transactions() {
     } catch (err: any) {
       addToast({ type: 'error', title: 'Failed to load transactions', message: err.message });
     } finally {
-      setLoading(false);
+      if (showLoader) {
+        setLoading(false);
+      }
     }
-  };
+  }, [addToast, page, status, type]);
+
+  useEffect(() => {
+    loadTransactions();
+  }, [loadTransactions]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadTransactions(false);
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [loadTransactions]);
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('en-US', {
@@ -55,6 +71,72 @@ export function Transactions() {
         return 'admin-badge-info';
       default:
         return 'admin-badge-neutral';
+    }
+  };
+
+  const isManualQrPending = (tx: Transaction) => {
+    return (
+      tx.status === 'pending' &&
+      tx.type === 'subscription' &&
+      tx.payment_method === 'manual_qr'
+    );
+  };
+
+  const getBillingLabel = (tx: Transaction) => {
+    const billing = tx.metadata?.billing;
+    return billing === 'yearly' ? 'Yearly' : 'Monthly';
+  };
+
+  const closeApproveModal = () => {
+    setApproveTarget(null);
+    setReviewReason('');
+  };
+
+  const closeRejectModal = () => {
+    setRejectTarget(null);
+    setReviewReason('');
+  };
+
+  const handleApprove = async () => {
+    if (!approveTarget) return;
+
+    setActionLoading(true);
+    try {
+      const reason = reviewReason.trim();
+      await adminApi.approveTransaction(approveTarget.id, reason || undefined);
+      addToast({ type: 'success', title: 'Payment approved and Pro activated' });
+      closeApproveModal();
+      await loadTransactions();
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Failed to approve transaction', message: err.message });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!rejectTarget) return;
+
+    const reason = reviewReason.trim();
+    if (reason.length < 3) {
+      addToast({
+        type: 'error',
+        title: 'Reason required',
+        message: 'Please provide at least 3 characters for rejection reason.',
+      });
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      await adminApi.rejectTransaction(rejectTarget.id, reason);
+      addToast({ type: 'success', title: 'Payment request rejected' });
+      closeRejectModal();
+      await loadTransactions();
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Failed to reject transaction', message: err.message });
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -95,6 +177,26 @@ export function Transactions() {
             <option value="refund">Refund</option>
             <option value="credit">Credit</option>
           </select>
+          <button
+            className="admin-btn admin-btn-secondary"
+            type="button"
+            onClick={() => loadTransactions()}
+            disabled={loading || actionLoading}
+          >
+            Refresh
+          </button>
+          <button
+            className="admin-btn admin-btn-secondary"
+            type="button"
+            onClick={() => {
+              setStatus('');
+              setType('');
+              setPage(1);
+            }}
+            disabled={loading || actionLoading}
+          >
+            Clear Filters
+          </button>
         </div>
 
         {/* Table */}
@@ -122,6 +224,7 @@ export function Transactions() {
                     <th>Status</th>
                     <th>Method</th>
                     <th>Date</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -149,6 +252,36 @@ export function Transactions() {
                       </td>
                       <td>{tx.payment_method || 'N/A'}</td>
                       <td>{formatDate(tx.created_at)}</td>
+                      <td>
+                        {isManualQrPending(tx) ? (
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button
+                              className="admin-btn admin-btn-primary admin-btn-sm"
+                              onClick={() => {
+                                setApproveTarget(tx);
+                                setReviewReason('');
+                              }}
+                              disabled={actionLoading}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              className="admin-btn admin-btn-danger admin-btn-sm"
+                              onClick={() => {
+                                setRejectTarget(tx);
+                                setReviewReason('');
+                              }}
+                              disabled={actionLoading}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 12, color: 'var(--admin-color-text-muted)' }}>
+                            No action
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -187,6 +320,128 @@ export function Transactions() {
           </div>
         )}
       </div>
+
+      {approveTarget && (
+        <div className="admin-modal-overlay" onClick={closeApproveModal}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h2 className="admin-modal-title">Approve Manual QR Payment</h2>
+              <p className="admin-modal-description">
+                This will mark the transaction as completed and activate Pro access immediately.
+              </p>
+            </div>
+            <div className="admin-modal-body">
+              <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Transaction</span>
+                  <strong>#{approveTarget.id}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>User</span>
+                  <strong>{approveTarget.user_name || `User #${approveTarget.user_id || 'N/A'}`}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Amount</span>
+                  <strong>Rs. {approveTarget.amount}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Billing</span>
+                  <strong>{getBillingLabel(approveTarget)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Reference</span>
+                  <strong>{approveTarget.payment_ref || 'N/A'}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Payer name</span>
+                  <strong>{String(approveTarget.metadata?.payer_name || 'N/A')}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Submitted note</span>
+                  <strong>{String(approveTarget.metadata?.note || 'N/A')}</strong>
+                </div>
+              </div>
+
+              <div className="admin-input-group" style={{ marginBottom: 0 }}>
+                <label className="admin-input-label">Approval note (optional)</label>
+                <input
+                  type="text"
+                  className="admin-input"
+                  value={reviewReason}
+                  onChange={(e) => setReviewReason(e.target.value)}
+                  placeholder="Optional internal note for audit log"
+                  maxLength={300}
+                />
+              </div>
+            </div>
+            <div className="admin-modal-footer">
+              <button className="admin-btn admin-btn-secondary" onClick={closeApproveModal} disabled={actionLoading}>
+                Cancel
+              </button>
+              <button className="admin-btn admin-btn-primary" onClick={handleApprove} disabled={actionLoading}>
+                {actionLoading ? 'Approving...' : 'Approve and Activate Pro'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rejectTarget && (
+        <div className="admin-modal-overlay" onClick={closeRejectModal}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h2 className="admin-modal-title">Reject Manual QR Payment</h2>
+              <p className="admin-modal-description">
+                Rejection reason is required so the team and user can understand what to correct.
+              </p>
+            </div>
+            <div className="admin-modal-body">
+              <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Transaction</span>
+                  <strong>#{rejectTarget.id}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>User</span>
+                  <strong>{rejectTarget.user_name || `User #${rejectTarget.user_id || 'N/A'}`}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Reference</span>
+                  <strong>{rejectTarget.payment_ref || 'N/A'}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Payer name</span>
+                  <strong>{String(rejectTarget.metadata?.payer_name || 'N/A')}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Submitted note</span>
+                  <strong>{String(rejectTarget.metadata?.note || 'N/A')}</strong>
+                </div>
+              </div>
+
+              <div className="admin-input-group" style={{ marginBottom: 0 }}>
+                <label className="admin-input-label">Reason for rejection</label>
+                <textarea
+                  className="admin-input"
+                  value={reviewReason}
+                  onChange={(e) => setReviewReason(e.target.value)}
+                  placeholder="Example: Amount mismatch, reference not visible, duplicate transfer"
+                  rows={4}
+                  maxLength={300}
+                />
+              </div>
+            </div>
+            <div className="admin-modal-footer">
+              <button className="admin-btn admin-btn-secondary" onClick={closeRejectModal} disabled={actionLoading}>
+                Cancel
+              </button>
+              <button className="admin-btn admin-btn-danger" onClick={handleReject} disabled={actionLoading}>
+                {actionLoading ? 'Rejecting...' : 'Reject Payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }

@@ -256,6 +256,26 @@ class AdminApiClient {
     return this.request<any>('/transactions/stats');
   }
 
+  async approveTransaction(id: number, reason?: string) {
+    return this.request<{ message: string; transaction: Transaction; subscription: Subscription }>(
+      `/transactions/${id}/approve`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }
+    );
+  }
+
+  async rejectTransaction(id: number, reason: string) {
+    return this.request<{ message: string; transaction: Transaction }>(
+      `/transactions/${id}/reject`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }
+    );
+  }
+
   // Subscriptions
   async getSubscriptions(params: {
     page?: number;
