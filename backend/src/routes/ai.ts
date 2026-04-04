@@ -71,7 +71,7 @@ router.post("/ai/suggest-reply", auth, checkReplyLimit, async (req: AuthRequest,
 
   try {
     const productsRes = await pool.query(
-      `SELECT id, name, price, keywords, notes FROM products WHERE user_id = $1`,
+      `SELECT id, name, price::double precision AS price, keywords, notes FROM products WHERE user_id = $1`,
       [req.userId]
     );
 
@@ -173,7 +173,7 @@ Reply text only. Nothing else.
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
     const zonesRes = await pool.query(
-      `SELECT id, name, price, cod_available
+      `SELECT id, name, price::double precision AS price, cod_available
        FROM delivery_zones
        WHERE user_id = $1
        ORDER BY created_at ASC`,

@@ -39,7 +39,7 @@ router.post("/", auth, checkProductLimit, async (req: AuthRequest, res) => {
     const result = await pool.query(
       `INSERT INTO products (user_id, name, price, keywords, notes)
        VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, name, price, keywords, notes`,
+       RETURNING id, name, price::double precision AS price, keywords, notes`,
       [req.userId, name, price, keywords || null, notes || null]
     );
 
@@ -57,7 +57,7 @@ router.post("/", auth, checkProductLimit, async (req: AuthRequest, res) => {
 router.get("/", auth, async (req: AuthRequest, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, name, price, keywords, notes
+      `SELECT id, name, price::double precision AS price, keywords, notes
        FROM products
        WHERE user_id = $1
        ORDER BY id DESC`,
@@ -106,7 +106,7 @@ router.patch("/:id", auth, async (req: AuthRequest, res) => {
            keywords = $3,
            notes = $4
        WHERE id = $5 AND user_id = $6
-       RETURNING id, name, price, keywords, notes`,
+       RETURNING id, name, price::double precision AS price, keywords, notes`,
       [name, price, keywords || null, notes || null, id, req.userId]
     );
 

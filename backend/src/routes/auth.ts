@@ -14,6 +14,14 @@ const loginRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const forgotPasswordRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  message: { error: "Too many reset requests. Please try again in 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const router = express.Router();
 
 // Debug test route
@@ -115,6 +123,36 @@ router.post("/login", loginRateLimiter, async (req, res) => {
     console.error("Login error:", err);
     // CRITICAL: Don't expose internal error details to client
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.post("/forgot-password", forgotPasswordRateLimiter, async (req, res) => {
+  const { email } = req.body;
+
+  if (!email || typeof email !== "string") {
+    return res.status(400).json({ error: "Email is required" });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!emailRegex.test(normalizedEmail) || normalizedEmail.length > 255) {
+    return res.status(400).json({ error: "Invalid email address" });
+  }
+
+  try {
+    // Query intentionally does not change response payload to avoid account enumeration.
+    await pool.query("SELECT id FROM users WHERE email = $1 LIMIT 1", [
+      normalizedEmail,
+    ]);
+
+    return res.json({
+      message:
+        "If an account exists for this email, reset instructions will be sent shortly.",
+    });
+  } catch (err: any) {
+    console.error("Forgot password error:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 

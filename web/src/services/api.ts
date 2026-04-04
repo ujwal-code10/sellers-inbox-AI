@@ -16,6 +16,10 @@ export interface MeResponse {
   user: User
 }
 
+export interface ForgotPasswordResponse {
+  message: string
+}
+
 export interface PlanResponse {
   current: {
     plan: 'free' | 'pro'
@@ -129,6 +133,13 @@ class ApiClient {
     return this.request<AuthResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+    })
+  }
+
+  async requestPasswordReset(email: string): Promise<ForgotPasswordResponse> {
+    return this.request<ForgotPasswordResponse>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
     })
   }
 

@@ -89,11 +89,13 @@ Smart Reply Assistant helps small Nepali Instagram and WhatsApp sellers generate
 
 ### 1.4 Target Users
 
-| Persona | Description | Primary Need |
+| Persona | Examples | Primary Need |
 |---|---|---|
-| **Solo Seller** | Individual selling via WhatsApp/Instagram | Reply to 50+ daily messages quickly |
-| **Small Business Owner** | 2–5 staff | Consistent branded replies |
-| **Reseller** | Dropshipper with multiple product lines | Fast replies per product |
+| **Clothing seller** | Hoodies, tshirts, jeans, kurta | Price + variants + delivery |
+| **Cosmetics seller** | Skincare, makeup, perfume | Price + availability |
+| **Handmade seller** | Jewellery, candles, art | Quality questions + price |
+| **Accessories seller** | Bags, watches, caps | Variants + price |
+| **Food/snack seller** | Homemade food, imports | Price + delivery + quantity |
 
 ### 1.5 Language — CRITICAL
 
