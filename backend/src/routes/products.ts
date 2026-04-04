@@ -63,7 +63,6 @@ router.get("/", auth, async (req: AuthRequest, res) => {
          p.price::double precision AS price,
          p.keywords,
          p.notes,
-         p.created_at,
          COALESCE(
            json_agg(
              json_build_object(
@@ -73,7 +72,7 @@ router.get("/", auth, async (req: AuthRequest, res) => {
                'size', v.size,
                'available', v.available
              )
-             ORDER BY v.created_at
+             ORDER BY v.id
            ) FILTER (WHERE v.id IS NOT NULL),
            '[]'::json
          ) AS variants
@@ -81,7 +80,7 @@ router.get("/", auth, async (req: AuthRequest, res) => {
        LEFT JOIN variants v ON v.product_id = p.id
        WHERE p.user_id = $1
        GROUP BY p.id
-       ORDER BY p.created_at DESC`,
+       ORDER BY p.id DESC`,
       [req.userId]
     );
 
