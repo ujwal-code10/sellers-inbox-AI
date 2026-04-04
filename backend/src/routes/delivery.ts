@@ -34,7 +34,7 @@ router.post("/delivery-zones", auth, async (req: AuthRequest, res) => {
     const result = await pool.query(
       `INSERT INTO delivery_zones (user_id, name, price, cod_available)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, user_id, name, price, cod_available, created_at`,
+       RETURNING id, user_id, name, price::double precision AS price, cod_available, created_at`,
       [req.userId, name, price, codAvailable ?? true]
     );
     res.status(201).json(result.rows[0]);
@@ -51,7 +51,7 @@ router.post("/delivery-zones", auth, async (req: AuthRequest, res) => {
 router.get("/delivery-zones", auth, async (req: AuthRequest, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, name, price, cod_available, created_at
+      `SELECT id, name, price::double precision AS price, cod_available, created_at
        FROM delivery_zones
        WHERE user_id = $1
        ORDER BY created_at ASC`,
@@ -115,7 +115,7 @@ router.patch("/delivery-zones/:id", auth, async (req: AuthRequest, res) => {
       `UPDATE delivery_zones
        SET ${updates.join(", ")}
        WHERE id = $${paramCount} AND user_id = $${paramCount + 1}
-       RETURNING id, name, price, cod_available, created_at`,
+       RETURNING id, name, price::double precision AS price, cod_available, created_at`,
       values
     );
 
