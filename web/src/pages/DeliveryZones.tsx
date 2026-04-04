@@ -4,10 +4,15 @@ import { useUIFeedback } from '../context/UIFeedbackContext'
 import AppAlert from '../components/ui/AppAlert'
 import AppButton from '../components/ui/AppButton'
 
-export default function DeliveryZones() {
+interface DeliveryZonesProps {
+  initialData?: DeliveryZone[] | null
+  onDataChange?: (zones: DeliveryZone[]) => void
+}
+
+export default function DeliveryZones({ initialData = null, onDataChange }: DeliveryZonesProps) {
   const { notify } = useUIFeedback()
   const [zones, setZones] = useState<DeliveryZone[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(initialData === null)
   const [error, setError] = useState('')
 
   // Add zone form
@@ -24,15 +29,24 @@ export default function DeliveryZones() {
   const [editCod, setEditCod] = useState(true)
 
   useEffect(() => {
+    if (initialData !== null) {
+      setZones(initialData)
+      setLoading(false)
+      return
+    }
+
     loadZones()
   }, [])
 
-  const loadZones = async () => {
-    setLoading(true)
+  const loadZones = async (showSpinner = true) => {
+    if (showSpinner) {
+      setLoading(true)
+    }
     setError('')
     try {
       const zonesData = await api.getDeliveryZones()
       setZones(zonesData)
+      onDataChange?.(zonesData)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load zones'
       setError(message)
@@ -52,7 +66,9 @@ export default function DeliveryZones() {
         parseFloat(newZonePrice),
         newZoneCod
       )
-      setZones([...zones, zone])
+      const nextZones = [...zones, zone]
+      setZones(nextZones)
+      onDataChange?.(nextZones)
       setNewZoneName('')
       setNewZonePrice('')
       setNewZoneCod(true)
@@ -84,7 +100,9 @@ export default function DeliveryZones() {
         parseFloat(editPrice),
         editCod
       )
-      setZones(zones.map(z => z.id === updated.id ? updated : z))
+      const nextZones = zones.map(z => z.id === updated.id ? updated : z)
+      setZones(nextZones)
+      onDataChange?.(nextZones)
       setEditingZone(null)
       notify({ type: 'success', title: 'Delivery zone updated', message: updated.name })
     } catch (err) {
@@ -99,7 +117,9 @@ export default function DeliveryZones() {
 
     try {
       await api.deleteDeliveryZone(id)
-      setZones(zones.filter(z => z.id !== id))
+      const nextZones = zones.filter(z => z.id !== id)
+      setZones(nextZones)
+      onDataChange?.(nextZones)
       notify({ type: 'success', title: 'Delivery zone deleted' })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete zone'
@@ -120,9 +140,14 @@ export default function DeliveryZones() {
     <div className="delivery-page">
       <div className="page-header">
         <h2>Delivery Zones</h2>
-        <AppButton onClick={() => setShowAddZone(true)} className="btn-add" variant="primary">
-          + Add Zone
-        </AppButton>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <AppButton onClick={() => loadZones(false)} variant="secondary" size="sm">
+            Refresh
+          </AppButton>
+          <AppButton onClick={() => setShowAddZone(true)} className="btn-add" variant="primary">
+            + Add Zone
+          </AppButton>
+        </div>
       </div>
 
       {error ? (

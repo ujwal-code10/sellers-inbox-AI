@@ -13,7 +13,7 @@ import {
   User01,
   Zap,
 } from '@untitledui/icons'
-import { api, Product, PlanResponse } from '../services/api'
+import { api, DeliveryZone, Product, PlanResponse } from '../services/api'
 import AppAlert from '../components/ui/AppAlert'
 import AppButton from '../components/ui/AppButton'
 import Products from './Products'
@@ -122,6 +122,9 @@ export default function Dashboard() {
   const [savingName, setSavingName] = useState(false)
   const [planData, setPlanData] = useState<PlanResponse | null>(null)
   const [planLoading, setPlanLoading] = useState(false)
+  const [cachedProducts, setCachedProducts] = useState<Product[] | null>(null)
+  const [cachedZones, setCachedZones] = useState<DeliveryZone[] | null>(null)
+  const [cachedPlan, setCachedPlan] = useState<PlanResponse | null>(null)
   const [customerMessage, setCustomerMessage] = useState('')
   const [result, setResult] = useState<ReplyResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -137,12 +140,37 @@ export default function Dashboard() {
   const [productSearch, setProductSearch] = useState('')
   const [showProductPicker, setShowProductPicker] = useState(false)
 
+  useEffect(() => {
+    let active = true
+
+    Promise.all([
+      api.getProducts(),
+      api.getDeliveryZones(),
+      api.getPlans(),
+    ])
+      .then(([productsData, zonesData, plan]) => {
+        if (!active) return
+        setCachedProducts(productsData)
+        setProducts(productsData)
+        setCachedZones(zonesData)
+        setCachedPlan(plan)
+        setPlanData(plan)
+      })
+      .catch((err) => {
+        console.error('Dashboard prefetch failed:', err)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
   // Load products when reply tab is active
   useEffect(() => {
     if (activeTab === 'reply' && products.length === 0 && !productsLoading) {
       loadProducts()
     }
-  }, [activeTab])
+  }, [activeTab, products.length, productsLoading])
 
   useEffect(() => {
     const nextName = user?.name ?? ''
@@ -154,15 +182,35 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (activeTab === 'profile') {
-      loadPlanData()
+      if (!planData && !planLoading) {
+        loadPlanData()
+      }
     }
-  }, [activeTab])
+  }, [activeTab, planData, planLoading])
+
+  useEffect(() => {
+    if (cachedProducts !== null) {
+      setProducts(cachedProducts)
+    }
+  }, [cachedProducts])
+
+  useEffect(() => {
+    if (cachedPlan) {
+      setPlanData(cachedPlan)
+    }
+  }, [cachedPlan])
 
   const loadProducts = async () => {
+    if (cachedProducts !== null) {
+      setProducts(cachedProducts)
+      return
+    }
+
     setProductsLoading(true)
     try {
       const productsData = await api.getProducts()
       setProducts(productsData)
+      setCachedProducts(productsData)
     } catch (err) {
       console.error('Failed to load products:', err)
     } finally {
@@ -171,10 +219,16 @@ export default function Dashboard() {
   }
 
   const loadPlanData = async () => {
+    if (cachedPlan) {
+      setPlanData(cachedPlan)
+      return
+    }
+
     setPlanLoading(true)
     try {
       const data = await api.getPlans()
       setPlanData(data)
+      setCachedPlan(data)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load plan details'
       notify({ type: 'error', title: 'Could not load plan details', message })
@@ -354,8 +408,10 @@ Location/Address:`
     }
   }
 
-  const repliesToday = planData?.usage.replies_today ?? 0
-  const repliesLimit = planData?.usage.replies_limit
+  const effectivePlanData = cachedPlan ?? planData
+
+  const repliesToday = effectivePlanData?.usage.replies_today ?? 0
+  const repliesLimit = effectivePlanData?.usage.replies_limit
   const repliesProgressPercent = repliesLimit
     ? Math.min(100, Math.round((repliesToday / repliesLimit) * 100))
     : 100
@@ -366,8 +422,8 @@ Location/Address:`
       ? '#d97706'
       : '#1d9e75'
 
-  const proExpiryLabel = planData?.current.expires_at
-    ? new Date(planData.current.expires_at).toLocaleDateString('en-US', {
+  const proExpiryLabel = effectivePlanData?.current.expires_at
+    ? new Date(effectivePlanData.current.expires_at).toLocaleDateString('en-US', {
       month: 'long',
       year: 'numeric',
     })
@@ -660,14 +716,14 @@ Location/Address:`
             {activeTab === 'products' && (
               <section className="dashboard-tab-wrap">
                 <div className="dashboard-tab-surface">
-                  <Products />
+                  <Products initialData={cachedProducts} onDataChange={setCachedProducts} />
                 </div>
               </section>
             )}
             {activeTab === 'delivery' && (
               <section className="dashboard-tab-wrap">
                 <div className="dashboard-tab-surface">
-                  <DeliveryZones />
+                  <DeliveryZones initialData={cachedZones} onDataChange={setCachedZones} />
                 </div>
               </section>
             )}
@@ -743,9 +799,9 @@ Location/Address:`
                   <section className="profile-card">
                     <p className="profile-card-title">⚡ Your Plan</p>
 
-                  {planLoading ? (
+                  {!effectivePlanData && planLoading ? (
                     <div className="profile-plan-empty">Loading plan details...</div>
-                  ) : !planData ? (
+                  ) : !effectivePlanData ? (
                     <div className="profile-plan-empty-wrap">
                       <div className="profile-plan-empty">
                         Plan details are unavailable right now.
@@ -754,7 +810,7 @@ Location/Address:`
                         Retry
                       </AppButton>
                     </div>
-                  ) : planData?.current.plan === 'pro' ? (
+                  ) : effectivePlanData.current.plan === 'pro' ? (
                     <>
                       <div className="profile-row">
                         <span className="profile-label">Plan</span>

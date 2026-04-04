@@ -10,11 +10,16 @@ interface VariantRow {
   available: boolean
 }
 
-export default function Products() {
+interface ProductsProps {
+  initialData?: Product[] | null
+  onDataChange?: (products: Product[]) => void
+}
+
+export default function Products({ initialData = null, onDataChange }: ProductsProps) {
   const { notify } = useUIFeedback()
   const [products, setProducts] = useState<Product[]>([])
   const [variantsByProduct, setVariantsByProduct] = useState<Record<number, Variant[]>>({})
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(initialData === null)
   const [error, setError] = useState('')
   const [expandedProduct, setExpandedProduct] = useState<number | null>(null)
 
@@ -34,32 +39,81 @@ export default function Products() {
   const [gridGenerated, setGridGenerated] = useState(false)
   const [savingVariants, setSavingVariants] = useState(false)
 
-  useEffect(() => { loadData() }, [])
+  const syncProductVariants = (productId: number, nextVariants: Variant[]) => {
+    setProducts(prev => {
+      const next = prev.map(product =>
+        product.id === productId
+          ? { ...product, variants: nextVariants }
+          : product
+      )
+      onDataChange?.(next)
+      return next
+    })
+  }
 
-  const loadData = async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const productsData = await api.getProducts()
-      setProducts(productsData)
+  const hydrateProductsData = async (productsData: Product[]) => {
+    setProducts(productsData)
+    onDataChange?.(productsData)
 
-      // Fetch all variants in parallel instead of sequentially
-      const variantPromises = productsData.map(product =>
-        api.getVariants(product.id).then(variants => ({
-          productId: product.id,
-          variants
-        }))
+    const variantsMap: Record<number, Variant[]> = {}
+    const missingVariantPayload = productsData.filter(product => !Array.isArray(product.variants))
+
+    productsData.forEach(product => {
+      if (Array.isArray(product.variants)) {
+        variantsMap[product.id] = product.variants
+      }
+    })
+
+    if (missingVariantPayload.length > 0) {
+      const variantResults = await Promise.all(
+        missingVariantPayload.map(product =>
+          api.getVariants(product.id).then(variants => ({
+            productId: product.id,
+            variants,
+          }))
+        )
       )
 
-      const variantResults = await Promise.all(variantPromises)
-
-      // Build the variants map from parallel results
-      const variantsMap: Record<number, Variant[]> = {}
       variantResults.forEach(result => {
         variantsMap[result.productId] = result.variants
       })
 
+      setProducts(prev => {
+        const next = prev.map(product => ({
+          ...product,
+          variants: variantsMap[product.id] ?? [],
+        }))
+        onDataChange?.(next)
+        return next
+      })
+    }
+
+    setVariantsByProduct(variantsMap)
+  }
+
+  useEffect(() => {
+    if (initialData !== null) {
+      const variantsMap: Record<number, Variant[]> = {}
+      initialData.forEach(product => {
+        variantsMap[product.id] = Array.isArray(product.variants) ? product.variants : []
+      })
+      setProducts(initialData)
       setVariantsByProduct(variantsMap)
+      setLoading(false)
+      return
+    }
+
+    loadData()
+  }, [])
+
+  const loadData = async (showSpinner = true) => {
+    if (showSpinner) {
+      setLoading(true)
+    }
+    setError('')
+    try {
+      const productsData = await api.getProducts()
+      await hydrateProductsData(productsData)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load data'
       setError(message)
@@ -105,6 +159,7 @@ export default function Products() {
       }
       const updated = await api.getVariants(productId)
       setVariantsByProduct(prev => ({ ...prev, [productId]: updated }))
+      syncProductVariants(productId, updated)
       setShowVariantGrid(null)
       setGridColors('')
       setGridSizes('')
@@ -135,13 +190,16 @@ export default function Products() {
     if (!newName.trim() || !newPrice) return
     setAddingProduct(true)
     try {
-      const product = await api.createProduct(
+      const created = await api.createProduct(
         newName.trim(),
         parseFloat(newPrice),
         newKeywords.trim() || undefined,
         newNotes.trim() || undefined
       )
-      setProducts([product, ...products])
+      const product: Product = { ...created, variants: [] }
+      const nextProducts = [product, ...products]
+      setProducts(nextProducts)
+      onDataChange?.(nextProducts)
       setVariantsByProduct({ ...variantsByProduct, [product.id]: [] })
       setNewName(''); setNewPrice(''); setNewKeywords(''); setNewNotes('')
       setShowAddProduct(false)
@@ -160,7 +218,9 @@ export default function Products() {
     if (!confirm('Delete this product and all its variants?')) return
     try {
       await api.deleteProduct(id)
-      setProducts(products.filter(p => p.id !== id))
+      const nextProducts = products.filter(p => p.id !== id)
+      setProducts(nextProducts)
+      onDataChange?.(nextProducts)
       const updated = { ...variantsByProduct }
       delete updated[id]
       setVariantsByProduct(updated)
@@ -177,20 +237,32 @@ export default function Products() {
     // Optimistic update — change UI immediately
     setVariantsByProduct(prev => ({
       ...prev,
-      [variant.product_id]: prev[variant.product_id].map(v =>
+      [variant.product_id]: (prev[variant.product_id] || []).map(v =>
         v.id === variant.id ? { ...v, available: !v.available } : v
       )
     }))
+    syncProductVariants(
+      variant.product_id,
+      (variantsByProduct[variant.product_id] || []).map(v =>
+        v.id === variant.id ? { ...v, available: !v.available } : v
+      )
+    )
     try {
       await api.updateVariant(variant.id, !variant.available)
     } catch (err) {
       // Revert on failure
       setVariantsByProduct(prev => ({
         ...prev,
-        [variant.product_id]: prev[variant.product_id].map(v =>
+        [variant.product_id]: (prev[variant.product_id] || []).map(v =>
           v.id === variant.id ? { ...v, available: variant.available } : v
         )
       }))
+      syncProductVariants(
+        variant.product_id,
+        (variantsByProduct[variant.product_id] || []).map(v =>
+          v.id === variant.id ? { ...v, available: variant.available } : v
+        )
+      )
       setError('Failed to update variant')
       notify({ type: 'error', title: 'Could not update variant status' })
     }
@@ -199,11 +271,13 @@ export default function Products() {
   // ── Mark all variants for a product ──
   const handleMarkAll = async (productId: number, available: boolean) => {
     const variants = variantsByProduct[productId] || []
+    const updatedVariants = variants.map(v => ({ ...v, available }))
     // Optimistic update
     setVariantsByProduct(prev => ({
       ...prev,
-      [productId]: prev[productId].map(v => ({ ...v, available }))
+      [productId]: updatedVariants
     }))
+    syncProductVariants(productId, updatedVariants)
     try {
       await Promise.all(variants.map(v => api.updateVariant(v.id, available)))
       notify({
@@ -238,9 +312,14 @@ export default function Products() {
     <div className="products-page">
       <div className="page-header">
         <h2>Products</h2>
-        <AppButton onClick={() => setShowAddProduct(true)} className="btn-add" variant="primary">
-          + Add Product
-        </AppButton>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <AppButton onClick={() => loadData(false)} variant="secondary" size="sm">
+            Refresh
+          </AppButton>
+          <AppButton onClick={() => setShowAddProduct(true)} className="btn-add" variant="primary">
+            + Add Product
+          </AppButton>
+        </div>
       </div>
 
       {error ? (

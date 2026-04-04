@@ -68,6 +68,7 @@ export interface Product {
   id: number
   name: string
   price: number
+  variants?: Variant[]
   keywords?: string | null
   notes?: string | null
 }
@@ -289,3 +290,14 @@ class ApiClient {
 }
 
 export const api = new ApiClient()
+
+// Keep Vercel function warm
+// Ping every 8 minutes to prevent cold start
+const keepAlive = () => {
+  fetch('/api/health').catch(() => {})
+}
+
+// Start pinging when app loads
+if (typeof window !== 'undefined') {
+  setInterval(keepAlive, 8 * 60 * 1000)
+}
