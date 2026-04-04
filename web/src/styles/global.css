@@ -1058,9 +1058,17 @@ body {
   margin-bottom: 20px;
 }
 
+.modal .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
 /* Modal input styling - override dark theme for better readability */
 .modal .form-group input:not([type="checkbox"]):not([type="radio"]),
 .modal .form-group textarea {
+  width: 100%;
   background: #ffffff;
   color: #1a1a1a;
   border: 1px solid #ddd;
@@ -1083,6 +1091,8 @@ body {
 }
 
 .modal .form-group label {
+  display: block;
+  line-height: 1.35;
   color: #1a1a1a;
   font-size: 14px;
   font-weight: 600;
@@ -1214,10 +1224,15 @@ body {
 }
 
 .variants-section .form-group label {
+  display: block;
   color: #4b5a53;
 }
 
 .variants-section .form-group input:not([type="checkbox"]):not([type="radio"]) {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 8px;
+  font-size: 14px;
   background: #ffffff;
   color: #111827;
   border: 1px solid #d4ddd8;
