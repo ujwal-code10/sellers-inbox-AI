@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { api, type PlanResponse, type ManualQrConfigResponse, type BillingCycle } from '../services/api'
 
+interface UpgradeProps {
+  initialPlanData?: PlanResponse | null
+  initialQrConfig?: ManualQrConfigResponse | null
+  onPaymentDataLoaded?: (payload: { plan: PlanResponse; qrConfig: ManualQrConfigResponse }) => void
+}
+
 function normalizeQrImageUrl(rawUrl?: string | null): string | null {
   if (!rawUrl) return null
 
@@ -19,10 +25,14 @@ function normalizeQrImageUrl(rawUrl?: string | null): string | null {
   return normalizedPath ? `/${normalizedPath}` : null
 }
 
-export default function Upgrade() {
-  const [planData, setPlanData] = useState<PlanResponse | null>(null)
-  const [qrConfig, setQrConfig] = useState<ManualQrConfigResponse | null>(null)
-  const [loading, setLoading] = useState(true)
+export default function Upgrade({
+  initialPlanData = null,
+  initialQrConfig = null,
+  onPaymentDataLoaded,
+}: UpgradeProps) {
+  const [planData, setPlanData] = useState<PlanResponse | null>(initialPlanData)
+  const [qrConfig, setQrConfig] = useState<ManualQrConfigResponse | null>(initialQrConfig)
+  const [loading, setLoading] = useState(!(initialPlanData && initialQrConfig))
   const [submittingQr, setSubmittingQr] = useState(false)
   const [selectedBilling, setSelectedBilling] = useState<BillingCycle>('monthly')
   const [paymentReference, setPaymentReference] = useState('')
@@ -35,9 +45,25 @@ export default function Upgrade() {
   } | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
 
-  useEffect(() => { loadPlans() }, [])
+  useEffect(() => {
+    if (initialPlanData) {
+      setPlanData(initialPlanData)
+    }
+    if (initialQrConfig) {
+      setQrConfig(initialQrConfig)
+    }
+    if (initialPlanData && initialQrConfig) {
+      setLoading(false)
+    }
+  }, [initialPlanData, initialQrConfig])
+
+  useEffect(() => {
+    if (initialPlanData && initialQrConfig) return
+    loadPlans()
+  }, [])
 
   const loadPlans = async () => {
+    setLoading(true)
     setErrorMessage('')
     try {
       const [data, config] = await Promise.all([
@@ -47,6 +73,7 @@ export default function Upgrade() {
 
       setPlanData(data)
       setQrConfig(config)
+      onPaymentDataLoaded?.({ plan: data, qrConfig: config })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not load payment options'
       setErrorMessage(message)

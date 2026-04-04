@@ -13,7 +13,7 @@ import {
   User01,
   Zap,
 } from '@untitledui/icons'
-import { api, DeliveryZone, Product, PlanResponse } from '../services/api'
+import { api, DeliveryZone, Product, PlanResponse, type ManualQrConfigResponse } from '../services/api'
 import AppAlert from '../components/ui/AppAlert'
 import AppButton from '../components/ui/AppButton'
 import Products from './Products'
@@ -125,6 +125,7 @@ export default function Dashboard() {
   const [cachedProducts, setCachedProducts] = useState<Product[] | null>(null)
   const [cachedZones, setCachedZones] = useState<DeliveryZone[] | null>(null)
   const [cachedPlan, setCachedPlan] = useState<PlanResponse | null>(null)
+  const [cachedQrConfig, setCachedQrConfig] = useState<ManualQrConfigResponse | null>(null)
   const [customerMessage, setCustomerMessage] = useState('')
   const [result, setResult] = useState<ReplyResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -147,14 +148,16 @@ export default function Dashboard() {
       api.getProducts(),
       api.getDeliveryZones(),
       api.getPlans(),
+      api.getManualQrConfig(),
     ])
-      .then(([productsData, zonesData, plan]) => {
+      .then(([productsData, zonesData, plan, qrConfig]) => {
         if (!active) return
         setCachedProducts(productsData)
         setProducts(productsData)
         setCachedZones(zonesData)
         setCachedPlan(plan)
         setPlanData(plan)
+        setCachedQrConfig(qrConfig)
       })
       .catch((err) => {
         console.error('Dashboard prefetch failed:', err)
@@ -730,7 +733,15 @@ Location/Address:`
             {activeTab === 'payment' && (
               <section className="dashboard-tab-wrap">
                 <div className="payment-tab-wrap">
-                  <Upgrade />
+                  <Upgrade
+                    initialPlanData={cachedPlan}
+                    initialQrConfig={cachedQrConfig}
+                    onPaymentDataLoaded={({ plan, qrConfig }) => {
+                      setCachedPlan(plan)
+                      setPlanData(plan)
+                      setCachedQrConfig(qrConfig)
+                    }}
+                  />
                 </div>
               </section>
             )}
