@@ -64,6 +64,13 @@ export function AdminLogin() {
       <div className="admin-login-page">
         <div className="admin-login-card">
           <div className="admin-login-header">
+            <div className="admin-sidebar-brand" style={{ justifyContent: 'center', marginBottom: 10 }}>
+              <span className="admin-sidebar-brand-dot" />
+              <span>
+                <span className="admin-sidebar-logo">Seller Inbox</span>
+                <span className="admin-sidebar-subtitle">Admin Panel</span>
+              </span>
+            </div>
             <h1 className="admin-login-title">Admin Login</h1>
             <p className="admin-login-subtitle">
               Sign in to access the admin panel

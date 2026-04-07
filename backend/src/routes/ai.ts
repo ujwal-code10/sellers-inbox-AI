@@ -10,6 +10,41 @@ import { checkReplyLimit, incrementReplyCount } from "../middleware/checkPlan.js
 
 const router = express.Router();
 
+/**
+ * Log AI usage to ai_usage_logs table
+ * Non-blocking: errors are logged but don't break the main request
+ */
+async function logAIUsage(params: {
+  userId: number;
+  requestType: "suggest_reply" | "clarification";
+  inputTokens: number;
+  outputTokens: number;
+  latencyMs: number;
+  status: "success" | "failed";
+  errorMessage?: string;
+}): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO ai_usage_logs
+       (user_id, request_type, model, input_tokens, output_tokens, latency_ms, status, error_message)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        params.userId,
+        params.requestType,
+        "llama-3.3-70b-versatile",
+        params.inputTokens,
+        params.outputTokens,
+        params.latencyMs,
+        params.status,
+        params.errorMessage || null,
+      ]
+    );
+  } catch (err) {
+    console.error("Failed to log AI usage:", err);
+    // Don't throw - AI logging should not break the main operation
+  }
+}
+
 function detectIntent(message: string): "PRICE" | "AVAILABILITY" | "DELIVERY" | "DELIVERY_CONFIRM" | "COD" | "DETAILS" | "GENERAL" | "UNKNOWN" {
   const lowerMsg = message.toLowerCase();
 
@@ -158,6 +193,17 @@ Reply text only. Nothing else.
         clarification.choices[0]?.message.content?.trim() ||
         "Kun product bare sodhnu bhako? Naam ya description dinu hola.";
 
+      // Log clarification request (non-blocking)
+      const clarUsage = clarification.usage;
+      await logAIUsage({
+        userId: req.userId!,
+        requestType: "clarification",
+        inputTokens: clarUsage?.prompt_tokens || 0,
+        outputTokens: clarUsage?.completion_tokens || 0,
+        latencyMs: 0,
+        status: "success",
+      });
+
       return res.json({
         suggestions: [clarificationReply],
         decision: {
@@ -218,6 +264,17 @@ ${deliveryContext}
 
     await incrementReplyCount(req.userId!);
 
+    // Log AI usage (non-blocking)
+    const usage = completion.usage;
+    await logAIUsage({
+      userId: req.userId!,
+      requestType: "suggest_reply",
+      inputTokens: usage?.prompt_tokens || 0,
+      outputTokens: usage?.completion_tokens || 0,
+      latencyMs: 0, // Groq SDK doesn't expose latency, would need to measure manually if needed
+      status: "success",
+    });
+
     res.json({
       suggestions,
       decision: {
@@ -230,6 +287,17 @@ ${deliveryContext}
     });
   } catch (err: any) {
     console.error("AI suggest-reply error:", err);
+
+    // Log failed AI request (non-blocking)
+    await logAIUsage({
+      userId: req.userId!,
+      requestType: "suggest_reply",
+      inputTokens: 0,
+      outputTokens: 0,
+      latencyMs: 0,
+      status: "failed",
+      errorMessage: err?.message || "Unknown error",
+    });
 
     if (err?.status === 429) {
       return res.status(503).json({

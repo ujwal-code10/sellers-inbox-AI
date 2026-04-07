@@ -418,13 +418,22 @@
     .step-num {
       font-family: 'DM Serif Display', serif;
       font-size: 36px;
-      color: transparent;
-      -webkit-text-stroke: 1px rgba(29,158,117,0.3);
+      color: var(--white);
+      -webkit-text-stroke: 0;
       line-height: 1;
       margin-bottom: 12px;
     }
 
-    .step-icon { font-size: 26px; margin-bottom: 14px; }
+    .step-icon {
+      margin-bottom: 14px;
+      color: var(--green-light);
+    }
+
+    .step-icon .landing-icon {
+      width: 26px;
+      height: 26px;
+      stroke-width: 2;
+    }
 
     .step h3 {
       font-size: 16px;
@@ -455,7 +464,38 @@
       transform: translateY(-2px);
     }
 
-    .feature-icon { font-size: 26px; margin-bottom: 14px; }
+    .feature-icon {
+      margin-bottom: 14px;
+      color: var(--green-light);
+    }
+
+    .feature-icon .landing-icon {
+      width: 26px;
+      height: 26px;
+      stroke-width: 2;
+    }
+
+    .landing-icon-inline {
+      width: 14px;
+      height: 14px;
+      stroke-width: 2;
+      vertical-align: -2px;
+    }
+
+    .flow-pill-icon {
+      width: 12px;
+      height: 12px;
+      stroke-width: 2.2;
+      margin-right: 6px;
+      vertical-align: -2px;
+    }
+
+    .inline-note-icon {
+      width: 12px;
+      height: 12px;
+      stroke-width: 2.2;
+      vertical-align: -2px;
+    }
 
     .feature-card h3 {
       font-size: 15px;
@@ -958,7 +998,7 @@
         <div class="demo-reply">
           Cha hajur 😊 Red M size available cha. Price Rs. 2200 ho. Pokhara ma delivery Rs. 150 lagcha, COD pani available cha.
           <br />
-          <button class="demo-copy">📋 Copy reply</button>
+          <button class="demo-copy"><i data-lucide="copy" class="landing-icon-inline"></i>Copy reply</button>
         </div>
       </div>
     </div>
@@ -993,19 +1033,19 @@
     <div class="steps">
       <div class="step">
         <div class="step-num">01</div>
-        <div class="step-icon">📦</div>
+        <div class="step-icon"><i data-lucide="package" class="landing-icon"></i></div>
         <h3>Add your products</h3>
         <p>Add products with prices, colors, sizes, and delivery zones. Takes 5 minutes.</p>
       </div>
       <div class="step">
         <div class="step-num">02</div>
-        <div class="step-icon">📋</div>
+        <div class="step-icon"><i data-lucide="clipboard-paste" class="landing-icon"></i></div>
         <h3>Paste customer message</h3>
         <p>Copy any message from WhatsApp or Instagram. Paste it into the app.</p>
       </div>
       <div class="step">
         <div class="step-num">03</div>
-        <div class="step-icon">✨</div>
+        <div class="step-icon"><i data-lucide="sparkles" class="landing-icon"></i></div>
         <h3>Copy and send</h3>
         <p>Get a perfect reply in Romanized Nepali. Copy it and paste back to the customer.</p>
       </div>
@@ -1022,32 +1062,32 @@
 
     <div class="features-grid">
       <div class="feature-card">
-        <div class="feature-icon">🇳🇵</div>
+        <div class="feature-icon"><i data-lucide="languages" class="landing-icon"></i></div>
         <h3>Romanized Nepali</h3>
         <p>Replies in the same style the customer uses — "yo cha?", "kati ho?" Never Devanagari.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon">🎯</div>
+        <div class="feature-icon"><i data-lucide="target" class="landing-icon"></i></div>
         <h3>Auto product matching</h3>
         <p>AI reads the message and finds the right product automatically. No selecting needed.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon">📦</div>
+        <div class="feature-icon"><i data-lucide="boxes" class="landing-icon"></i></div>
         <h3>Stock-aware replies</h3>
         <p>Knows which colors and sizes are available. Never says "cha" for a sold-out item.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon">🚚</div>
+        <div class="feature-icon"><i data-lucide="truck" class="landing-icon"></i></div>
         <h3>Delivery prices included</h3>
         <p>Set your zones once. AI adds exact delivery prices when customers ask.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon">💬</div>
+        <div class="feature-icon"><i data-lucide="message-circle" class="landing-icon"></i></div>
         <h3>Smart clarification</h3>
         <p>When a message is unclear, AI asks naturally. Never guesses and gives a wrong reply.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon">🎚️</div>
+        <div class="feature-icon"><i data-lucide="sliders-horizontal" class="landing-icon"></i></div>
         <h3>Tone selector</h3>
         <p>Friendly, Professional, or Persuasive. Every reply matches how you want to sound.</p>
       </div>
@@ -1067,7 +1107,7 @@
 
       <!-- Step 1 — AI -->
       <div style="display:flex; gap:12px; align-items:flex-start; margin-bottom:8px;">
-        <div style="background:var(--green-dim); border:1px solid rgba(29,158,117,0.2); border-radius:8px; padding:4px 10px; font-size:11px; font-weight:700; color:var(--green); white-space:nowrap; margin-top:4px;">✨ USE AI</div>
+        <div style="background:var(--green-dim); border:1px solid rgba(29,158,117,0.2); border-radius:8px; padding:4px 10px; font-size:11px; font-weight:700; color:var(--green); white-space:nowrap; margin-top:4px;"><i data-lucide="sparkles" class="flow-pill-icon"></i>USE AI</div>
         <div>
           <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">Customer sends first inquiry:</div>
           <div class="chat-bubble chat-customer" style="max-width:100%; font-size:13px;">"yo blue hoodie M size cha? kati ho price ani delivery Ktm ma huncha?"</div>
@@ -1079,11 +1119,11 @@
 
       <!-- Step 2 — Manual -->
       <div style="display:flex; gap:12px; align-items:flex-start; margin-bottom:8px;">
-        <div style="background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:4px 10px; font-size:11px; font-weight:700; color:var(--muted); white-space:nowrap; margin-top:4px;">✋ MANUAL</div>
+        <div style="background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:4px 10px; font-size:11px; font-weight:700; color:var(--muted); white-space:nowrap; margin-top:4px;"><i data-lucide="hand" class="flow-pill-icon"></i>MANUAL</div>
         <div>
           <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">Customer confirms — 4 words, type manually:</div>
           <div class="chat-bubble chat-customer" style="max-width:100%; font-size:13px;">"okay M size blue ma gardenus hai"</div>
-          <div style="font-size:12px; color:var(--muted); margin-top:6px; padding:8px 12px; background:var(--bg2); border-radius:8px; border:1px solid var(--border);">Seller clicks: 📋 Copy Order Form → pastes to customer"</div>
+          <div style="font-size:12px; color:var(--muted); margin-top:6px; padding:8px 12px; background:var(--bg2); border-radius:8px; border:1px solid var(--border);">Seller clicks: <i data-lucide="copy" class="inline-note-icon"></i> Copy Order Form <i data-lucide="arrow-right" class="inline-note-icon"></i> pastes to customer.</div>
         </div>
       </div>
 
@@ -1091,7 +1131,7 @@
 
       <!-- Step 3 — Manual -->
       <div style="display:flex; gap:12px; align-items:flex-start; margin-bottom:8px;">
-        <div style="background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:4px 10px; font-size:11px; font-weight:700; color:var(--muted); white-space:nowrap; margin-top:4px;">✋ MANUAL</div>
+        <div style="background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:4px 10px; font-size:11px; font-weight:700; color:var(--muted); white-space:nowrap; margin-top:4px;"><i data-lucide="hand" class="flow-pill-icon"></i>MANUAL</div>
         <div>
           <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">Customer fills form and sends details:</div>
           <div class="chat-bubble chat-customer" style="max-width:100%; font-size:13px;">"Seller confirms payment details"</div>
@@ -1263,7 +1303,12 @@
     <p class="footer-copy">© 2026 Seller Inbox AI. Made for Nepali sellers.</p>
   </footer>
 
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script>
+    if (window.lucide) {
+      window.lucide.createIcons()
+    }
+
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(e => {
         if (e.isIntersecting) {
@@ -1303,18 +1348,32 @@
       if (!isOpen) item.classList.add('open')
     }
 
-    document.querySelector('.demo-copy').addEventListener('click', function() {
-      this.textContent = '✓ Copied!'
-      setTimeout(() => this.textContent = '📋 Copy reply', 2000)
-    })
+    const demoCopyButton = document.querySelector('.demo-copy')
+    if (demoCopyButton) {
+      const defaultMarkup = demoCopyButton.innerHTML
+      demoCopyButton.addEventListener('click', function() {
+        this.innerHTML = '<i data-lucide="check" class="landing-icon-inline"></i>Copied!'
+        if (window.lucide) {
+          window.lucide.createIcons()
+        }
+        setTimeout(() => {
+          this.innerHTML = defaultMarkup
+          if (window.lucide) {
+            window.lucide.createIcons()
+          }
+        }, 2000)
+      })
+    }
 
     // Hide mobile CTA when already at top (hero visible)
     const mobileCta = document.querySelector('.mobile-cta')
     const heroSection = document.querySelector('.hero')
-    const heroObserver = new IntersectionObserver((entries) => {
-      mobileCta.style.display = entries[0].isIntersecting ? 'none' : 'block'
-    }, { threshold: 0.3 })
-    heroObserver.observe(heroSection)
+    if (mobileCta && heroSection) {
+      const heroObserver = new IntersectionObserver((entries) => {
+        mobileCta.style.display = entries[0].isIntersecting ? 'none' : 'block'
+      }, { threshold: 0.3 })
+      heroObserver.observe(heroSection)
+    }
   </script>
 </body>
 </html>

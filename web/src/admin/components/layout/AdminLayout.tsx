@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../../context/AdminAuthContext';
 
@@ -32,13 +32,31 @@ function NavIcon({ path }: { path: string }) {
 export function AdminLayout({ children }: AdminLayoutProps) {
   const location = useLocation();
   const { admin, logout } = useAdminAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
 
   return (
     <div className="admin-root">
       <div className="admin-layout">
-        <aside className="admin-sidebar">
+        <button
+          type="button"
+          className={`admin-sidebar-backdrop ${sidebarOpen ? 'open' : ''}`}
+          aria-label="Close sidebar"
+          onClick={() => setSidebarOpen(false)}
+        />
+
+        <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
           <div className="admin-sidebar-header">
-            <span className="admin-sidebar-logo">Admin Panel</span>
+            <span className="admin-sidebar-brand">
+              <span className="admin-sidebar-brand-dot" />
+              <span>
+                <span className="admin-sidebar-logo">Seller Inbox</span>
+                <span className="admin-sidebar-subtitle">Admin Panel</span>
+              </span>
+            </span>
           </div>
 
           <nav className="admin-sidebar-nav">
@@ -57,7 +75,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           </nav>
 
           <div className="admin-sidebar-footer">
-            <button className="admin-nav-item" onClick={logout}>
+            <button type="button" className="admin-nav-item" onClick={logout}>
               <NavIcon path="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               <span>Logout</span>
             </button>
@@ -67,11 +85,29 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         <main className="admin-main">
           <header className="admin-topbar">
             <div className="admin-topbar-left">
+              <button
+                type="button"
+                className="admin-mobile-menu-btn"
+                aria-label="Open sidebar"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  width={18}
+                  height={18}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
               <Breadcrumb />
             </div>
             <div className="admin-topbar-right">
               {admin && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="admin-user-pill">
                   <div className="admin-avatar">
                     {admin.name.charAt(0).toUpperCase()}
                   </div>

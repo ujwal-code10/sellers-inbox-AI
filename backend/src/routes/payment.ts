@@ -401,6 +401,24 @@ router.post("/esewa/verify", auth, async (req: AuthRequest, res) => {
       [req.userId, billing || "monthly", expiresAt, transaction_code]
     );
 
+    // Create transaction record for audit trail
+    await pool.query(
+      `INSERT INTO transactions
+         (user_id, type, amount, currency, status, payment_method, payment_ref, metadata)
+       VALUES ($1, 'subscription', $2, 'NPR', 'completed', 'esewa', $3, $4::jsonb)`,
+      [
+        req.userId,
+        total_amount,
+        transaction_code,
+        JSON.stringify({
+          billing: billing || "monthly",
+          esewa_transaction_code: transaction_code,
+          verified_at: new Date().toISOString(),
+          source: "esewa_payment",
+        }),
+      ]
+    );
+
     res.json({
       success: true,
       plan: "pro",

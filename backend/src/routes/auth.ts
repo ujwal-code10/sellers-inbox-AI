@@ -90,7 +90,7 @@ router.post("/login", loginRateLimiter, async (req, res) => {
 
   try {
     const result = await pool.query(
-      "SELECT id, name, email, password FROM users WHERE email = $1",
+      "SELECT id, name, email, password, banned_at, ban_reason FROM users WHERE email = $1",
       [email]
     );
 
@@ -99,6 +99,14 @@ router.post("/login", loginRateLimiter, async (req, res) => {
     }
 
     const user = result.rows[0];
+
+    // Check if user is banned
+    if (user.banned_at) {
+      return res.status(403).json({ 
+        error: `Account has been banned${user.ban_reason ? ': ' + user.ban_reason : ''}. Please contact support.` 
+      });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
