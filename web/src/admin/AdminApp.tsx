@@ -2,7 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AdminAuthProvider, useAdminAuth } from './context/AdminAuthContext';
 import { ToastProvider } from './context/ToastContext';
 import AdminLogin from './pages/AdminLogin';
-import Dashboard from './pages/Dashboard';
+import Dashboard from './pages';
 import Users from './pages/Users';
 import UserDetails from './pages/UserDetails';
 import Transactions from './pages/Transactions';
