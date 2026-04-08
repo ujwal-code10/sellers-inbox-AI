@@ -84,6 +84,44 @@ router.patch(
 
       const { plan, billing, status, expires_at, reason } = req.body;
 
+      if (plan !== undefined && plan !== "free" && plan !== "pro") {
+        return res.status(400).json({ error: "plan must be free or pro" });
+      }
+
+      if (
+        billing !== undefined &&
+        billing !== "monthly" &&
+        billing !== "yearly"
+      ) {
+        return res
+          .status(400)
+          .json({ error: "billing must be monthly or yearly" });
+      }
+
+      if (
+        status !== undefined &&
+        !["active", "inactive", "cancelled", "expired", "pending"].includes(
+          String(status)
+        )
+      ) {
+        return res.status(400).json({ error: "Invalid subscription status" });
+      }
+
+      if (expires_at !== undefined && expires_at !== null) {
+        const parsedExpiresAt = new Date(expires_at);
+        if (isNaN(parsedExpiresAt.getTime())) {
+          return res.status(400).json({ error: "Invalid expires_at date" });
+        }
+      }
+
+      if (reason !== undefined && typeof reason !== "string") {
+        return res.status(400).json({ error: "reason must be a string" });
+      }
+
+      if (typeof reason === "string" && reason.length > 300) {
+        return res.status(400).json({ error: "reason is too long" });
+      }
+
       // Get current subscription
       const currentResult = await pool.query(
         `SELECT * FROM subscriptions WHERE user_id = $1`,

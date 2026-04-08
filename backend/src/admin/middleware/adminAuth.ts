@@ -1,4 +1,9 @@
 import jwt from "jsonwebtoken";
+import {
+  COOKIE_NAMES,
+  isSafeMethod,
+  validateCsrfForCookieRequest,
+} from "../../utils/authSession.js";
 import { Request, Response, NextFunction } from "express";
 
 export interface AdminRequest extends Request {
@@ -13,18 +18,39 @@ export function adminAuth(
 ) {
   const header = req.headers.authorization;
 
-  if (!header) {
+  let tokenSource: "header" | "cookie" | null = null;
+  let token: string | null = null;
+
+  if (header && header.startsWith("Bearer ")) {
+    const parsedHeaderToken = header.split(" ")[1];
+    if (parsedHeaderToken) {
+      token = parsedHeaderToken;
+      tokenSource = "header";
+    }
+  }
+
+  if (!token) {
+    const cookieToken = req.cookies?.[COOKIE_NAMES.adminAccess];
+    if (typeof cookieToken === "string" && cookieToken.length > 0) {
+      token = cookieToken;
+      tokenSource = "cookie";
+    }
+  }
+
+  if (!token) {
     return res.status(401).json({ error: "No token provided" });
   }
 
-  const token = header.split(" ")[1];
-
-  if (!token) {
-    return res.status(401).json({ error: "Malformed authorization header" });
+  if (
+    tokenSource === "cookie" &&
+    !isSafeMethod(req.method) &&
+    !validateCsrfForCookieRequest(req)
+  ) {
+    return res.status(403).json({ error: "Invalid CSRF token" });
   }
 
   try {
-    const secret = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET;
+    const secret = process.env.ADMIN_JWT_SECRET;
     if (!secret) {
       console.error("ADMIN_JWT_SECRET not configured");
       return res.status(500).json({ error: "Server configuration error" });

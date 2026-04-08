@@ -1,6 +1,10 @@
 import { Router, Response } from "express";
 import pool from "../../utils/db.js";
-import { adminAuth, AdminRequest } from "../middleware/adminAuth.js";
+import {
+  adminAuth,
+  AdminRequest,
+  requireSuperAdmin,
+} from "../middleware/adminAuth.js";
 import { createAuditLog } from "../services/auditService.js";
 
 const router = Router();
@@ -164,59 +168,65 @@ router.get("/:id", adminAuth, async (req: AdminRequest, res: Response) => {
 });
 
 // PATCH /admin/users/:id/ban - Ban user
-router.patch("/:id/ban", adminAuth, async (req: AdminRequest, res: Response) => {
-  try {
-    const userId = parseInt(String(req.params.id), 10);
-    if (isNaN(userId)) {
-      return res.status(400).json({ error: "Invalid user ID" });
+router.patch(
+  "/:id/ban",
+  adminAuth,
+  requireSuperAdmin,
+  async (req: AdminRequest, res: Response) => {
+    try {
+      const userId = parseInt(String(req.params.id), 10);
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: "Invalid user ID" });
+      }
+
+      const { reason } = req.body;
+
+      // Check if user exists
+      const checkResult = await pool.query(
+        `SELECT id, banned_at FROM users WHERE id = $1`,
+        [userId]
+      );
+
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      if (checkResult.rows[0].banned_at) {
+        return res.status(400).json({ error: "User is already banned" });
+      }
+
+      // Ban the user
+      await pool.query(
+        `UPDATE users
+         SET banned_at = NOW(), banned_by = $1, ban_reason = $2
+         WHERE id = $3`,
+        [req.adminId, reason || null, userId]
+      );
+
+      await createAuditLog({
+        adminId: req.adminId!,
+        action: "user.ban",
+        entityType: "user",
+        entityId: userId,
+        oldValue: { banned_at: null },
+        newValue: { banned_at: new Date(), ban_reason: reason },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+      });
+
+      res.json({ message: "User banned successfully" });
+    } catch (err) {
+      console.error("Ban user error:", err);
+      res.status(500).json({ error: "Failed to ban user" });
     }
-
-    const { reason } = req.body;
-
-    // Check if user exists
-    const checkResult = await pool.query(
-      `SELECT id, banned_at FROM users WHERE id = $1`,
-      [userId]
-    );
-
-    if (checkResult.rows.length === 0) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    if (checkResult.rows[0].banned_at) {
-      return res.status(400).json({ error: "User is already banned" });
-    }
-
-    // Ban the user
-    await pool.query(
-      `UPDATE users
-       SET banned_at = NOW(), banned_by = $1, ban_reason = $2
-       WHERE id = $3`,
-      [req.adminId, reason || null, userId]
-    );
-
-    await createAuditLog({
-      adminId: req.adminId!,
-      action: "user.ban",
-      entityType: "user",
-      entityId: userId,
-      oldValue: { banned_at: null },
-      newValue: { banned_at: new Date(), ban_reason: reason },
-      ipAddress: req.ip,
-      userAgent: req.headers["user-agent"],
-    });
-
-    res.json({ message: "User banned successfully" });
-  } catch (err) {
-    console.error("Ban user error:", err);
-    res.status(500).json({ error: "Failed to ban user" });
   }
-});
+);
 
 // PATCH /admin/users/:id/unban - Unban user
 router.patch(
   "/:id/unban",
   adminAuth,
+  requireSuperAdmin,
   async (req: AdminRequest, res: Response) => {
     try {
       const userId = parseInt(String(req.params.id), 10);
@@ -279,14 +289,17 @@ router.get("/:id/usage", adminAuth, async (req: AdminRequest, res: Response) => 
     }
 
     const { days = "30" } = req.query;
-    const daysNum = Math.min(90, Math.max(1, parseInt(days as string, 10)));
+    const parsedDays = parseInt(days as string, 10);
+    const daysNum = Number.isFinite(parsedDays)
+      ? Math.min(90, Math.max(1, parsedDays))
+      : 30;
 
     const result = await pool.query(
       `SELECT date, reply_count
        FROM usage_daily
-       WHERE user_id = $1 AND date >= CURRENT_DATE - INTERVAL '${daysNum} days'
+       WHERE user_id = $1 AND date >= CURRENT_DATE - ($2 * INTERVAL '1 day')
        ORDER BY date DESC`,
-      [userId]
+      [userId, daysNum]
     );
 
     res.json({ data: result.rows });

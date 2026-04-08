@@ -124,33 +124,76 @@ export interface PaginatedResponse<T> {
 }
 
 class AdminApiClient {
-  private getToken(): string | null {
-    return localStorage.getItem('admin_token');
+  private getCsrfToken(): string | null {
+    if (typeof document === 'undefined') {
+      return null;
+    }
+
+    const match = document.cookie.match(/(?:^|; )sia_csrf=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  private isSafeMethod(method: string): boolean {
+    const normalized = method.toUpperCase();
+    return normalized === 'GET' || normalized === 'HEAD' || normalized === 'OPTIONS';
+  }
+
+  private shouldAttemptRefresh(endpoint: string): boolean {
+    const excluded = ['/auth/login', '/auth/refresh', '/auth/logout'];
+    return !excluded.some((path) => endpoint.startsWith(path));
+  }
+
+  private async refreshSession(): Promise<boolean> {
+    try {
+      const response = await fetch(`${ADMIN_API_BASE}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      return response.ok;
+    } catch {
+      return false;
+    }
   }
 
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
-    skipAuthRedirect: boolean = false
+    skipAuthRedirect: boolean = false,
+    allowRetry: boolean = true
   ): Promise<T> {
-    const token = this.getToken();
+    const method = (options.method || 'GET').toUpperCase();
+    const csrfToken = this.getCsrfToken();
+
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
 
-    if (token) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+    if (!this.isSafeMethod(method) && csrfToken) {
+      (headers as Record<string, string>)['X-CSRF-Token'] = csrfToken;
     }
 
     const response = await fetch(`${ADMIN_API_BASE}${endpoint}`, {
       ...options,
       headers,
+      credentials: 'include',
     });
 
-    // Handle 401 - but not for login endpoint
+    if (
+      response.status === 401 &&
+      !skipAuthRedirect &&
+      allowRetry &&
+      this.shouldAttemptRefresh(endpoint)
+    ) {
+      const refreshed = await this.refreshSession();
+      if (refreshed) {
+        return this.request<T>(endpoint, options, skipAuthRedirect, false);
+      }
+    }
+
+    // Handle 401 after refresh attempt - but not for login endpoint
     if (response.status === 401 && !skipAuthRedirect) {
-      localStorage.removeItem('admin_token');
       window.location.href = '/admin/login';
       throw new Error('Session expired');
     }
@@ -165,7 +208,7 @@ class AdminApiClient {
 
   // Auth - skip auth redirect for login since 401 means invalid credentials
   async login(email: string, password: string) {
-    return this.request<{ token: string; admin: AdminUser }>(
+    return this.request<{ admin: AdminUser }>(
       '/auth/login',
       {
         method: 'POST',
@@ -175,8 +218,16 @@ class AdminApiClient {
     );
   }
 
-  async getMe() {
-    return this.request<{ admin: AdminUser }>('/auth/me');
+  async getMe(skipAuthRedirect: boolean = false) {
+    return this.request<{ admin: AdminUser }>('/auth/me', {}, skipAuthRedirect);
+  }
+
+  async logout() {
+    return this.request<{ message: string }>(
+      '/auth/logout',
+      { method: 'POST' },
+      true
+    );
   }
 
   async changePassword(oldPassword: string, newPassword: string) {

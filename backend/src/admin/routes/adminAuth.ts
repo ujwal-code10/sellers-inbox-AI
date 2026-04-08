@@ -1,10 +1,24 @@
 import { Router, Response } from "express";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
 import pool from "../../utils/db.js";
 import { adminAuth, AdminRequest } from "../middleware/adminAuth.js";
 import { createAuditLog } from "../services/auditService.js";
+import {
+  ADMIN_REFRESH_TTL_SECONDS,
+  COOKIE_NAMES,
+  clearAdminAuthCookies,
+  clearCsrfCookie,
+  createRefreshSession,
+  issueCsrfCookie,
+  isSafeMethod,
+  revokeAllRefreshSessionsForAdmin,
+  revokeRefreshSession,
+  rotateRefreshSession,
+  setAdminAuthCookies,
+  signAdminAccessToken,
+  validateCsrfForCookieRequest,
+} from "../../utils/authSession.js";
 
 const router = Router();
 
@@ -13,6 +27,12 @@ const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 login attempts
   message: { error: "Too many login attempts. Please try again in 15 minutes." },
+});
+
+const refreshRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: { error: "Too many refresh attempts. Please try again shortly." },
 });
 
 // POST /admin/auth/login
@@ -36,7 +56,7 @@ router.post("/login", loginRateLimiter, async (req, res) => {
     const admin = result.rows[0];
 
     if (!admin.is_active) {
-      return res.status(403).json({ error: "Account is disabled" });
+      return res.status(401).json({ error: "Invalid credentials" });
     }
 
     const validPassword = await bcrypt.compare(password, admin.password);
@@ -50,16 +70,17 @@ router.post("/login", loginRateLimiter, async (req, res) => {
       [admin.id]
     );
 
-    const secret = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET;
-    if (!secret) {
-      return res.status(500).json({ error: "Server configuration error" });
-    }
+    const accessToken = signAdminAccessToken(admin.id, admin.role);
+    const refreshSession = await createRefreshSession({
+      tokenType: "admin",
+      adminId: admin.id,
+      ttlSeconds: ADMIN_REFRESH_TTL_SECONDS,
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
 
-    const token = jwt.sign(
-      { id: admin.id, role: admin.role, type: "admin" },
-      secret,
-      { expiresIn: "8h" }
-    );
+    setAdminAuthCookies(res, accessToken, refreshSession.token);
+    issueCsrfCookie(res);
 
     // Log the login
     await createAuditLog({
@@ -72,7 +93,6 @@ router.post("/login", loginRateLimiter, async (req, res) => {
     });
 
     res.json({
-      token,
       admin: {
         id: admin.id,
         email: admin.email,
@@ -84,6 +104,89 @@ router.post("/login", loginRateLimiter, async (req, res) => {
     console.error("Admin login error:", err);
     res.status(500).json({ error: "Login failed" });
   }
+});
+
+// POST /admin/auth/refresh
+router.post("/refresh", refreshRateLimiter, async (req, res) => {
+  const refreshToken = req.cookies?.[COOKIE_NAMES.adminRefresh];
+
+  if (!refreshToken || typeof refreshToken !== "string") {
+    clearAdminAuthCookies(res);
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const rotated = await rotateRefreshSession({
+      currentToken: refreshToken,
+      tokenType: "admin",
+      ttlSeconds: ADMIN_REFRESH_TTL_SECONDS,
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
+
+    if (!rotated?.adminId) {
+      clearAdminAuthCookies(res);
+      clearCsrfCookie(res);
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const adminResult = await pool.query(
+      `SELECT id, role, is_active FROM admin_users WHERE id = $1`,
+      [rotated.adminId]
+    );
+
+    if (
+      adminResult.rows.length === 0 ||
+      !adminResult.rows[0].is_active
+    ) {
+      clearAdminAuthCookies(res);
+      clearCsrfCookie(res);
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const admin = adminResult.rows[0];
+    const accessToken = signAdminAccessToken(admin.id, admin.role);
+    setAdminAuthCookies(res, accessToken, rotated.token);
+    issueCsrfCookie(res);
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Admin refresh error:", err);
+    clearAdminAuthCookies(res);
+    clearCsrfCookie(res);
+    return res.status(500).json({ error: "Failed to refresh session" });
+  }
+});
+
+// POST /admin/auth/logout
+router.post("/logout", async (req, res) => {
+  const hasSessionCookie = Boolean(
+    req.cookies?.[COOKIE_NAMES.adminAccess] ||
+      req.cookies?.[COOKIE_NAMES.adminRefresh]
+  );
+
+  if (
+    hasSessionCookie &&
+    !isSafeMethod(req.method) &&
+    !validateCsrfForCookieRequest(req)
+  ) {
+    return res.status(403).json({ error: "Invalid CSRF token" });
+  }
+
+  const refreshToken = req.cookies?.[COOKIE_NAMES.adminRefresh];
+
+  try {
+    if (typeof refreshToken === "string" && refreshToken.length > 0) {
+      await revokeRefreshSession(refreshToken, "admin");
+    }
+  } catch (err) {
+    console.error("Admin logout revoke error:", err);
+  }
+
+  clearAdminAuthCookies(res);
+  clearCsrfCookie(res);
+
+  return res.json({ message: "Logged out" });
 });
 
 // GET /admin/auth/me
@@ -149,6 +252,11 @@ router.post(
         [hashedPassword, req.adminId]
       );
 
+      await revokeAllRefreshSessionsForAdmin(req.adminId!);
+
+      clearAdminAuthCookies(res);
+      clearCsrfCookie(res);
+
       await createAuditLog({
         adminId: req.adminId!,
         action: "admin.password_change",
@@ -158,7 +266,7 @@ router.post(
         userAgent: req.headers["user-agent"],
       });
 
-      res.json({ message: "Password changed successfully" });
+      res.json({ message: "Password changed successfully. Please log in again." });
     } catch (err) {
       console.error("Change password error:", err);
       res.status(500).json({ error: "Failed to change password" });

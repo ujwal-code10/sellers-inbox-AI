@@ -95,19 +95,26 @@ export async function getDashboardStats() {
 }
 
 export async function getUserGrowth(days: number = 30) {
+  const safeDays = Number.isFinite(days)
+    ? Math.max(1, Math.min(365, Math.floor(days)))
+    : 30;
   const result = await pool.query(
     `SELECT
       DATE(created_at) as date,
       COUNT(*) as count
     FROM users
-    WHERE created_at >= CURRENT_DATE - INTERVAL '${days} days'
+    WHERE created_at >= CURRENT_DATE - ($1 * INTERVAL '1 day')
     GROUP BY DATE(created_at)
-    ORDER BY date`
+    ORDER BY date`,
+    [safeDays]
   );
   return result.rows;
 }
 
 export async function getRevenueMetrics(days: number = 30) {
+  const safeDays = Number.isFinite(days)
+    ? Math.max(1, Math.min(365, Math.floor(days)))
+    : 30;
   const result = await pool.query(
     `SELECT
       DATE(created_at) as date,
@@ -115,22 +122,27 @@ export async function getRevenueMetrics(days: number = 30) {
       COUNT(*) as count
     FROM transactions
     WHERE status = 'completed'
-      AND created_at >= CURRENT_DATE - INTERVAL '${days} days'
+      AND created_at >= CURRENT_DATE - ($1 * INTERVAL '1 day')
     GROUP BY DATE(created_at)
-    ORDER BY date`
+    ORDER BY date`,
+    [safeDays]
   );
   return result.rows;
 }
 
 export async function getAIUsageMetrics(days: number = 30) {
+  const safeDays = Number.isFinite(days)
+    ? Math.max(1, Math.min(365, Math.floor(days)))
+    : 30;
   const result = await pool.query(
     `SELECT
       date,
       SUM(reply_count) as total_requests
     FROM usage_daily
-    WHERE date >= CURRENT_DATE - INTERVAL '${days} days'
+    WHERE date >= CURRENT_DATE - ($1 * INTERVAL '1 day')
     GROUP BY date
-    ORDER BY date`
+    ORDER BY date`,
+    [safeDays]
   );
   return result.rows;
 }

@@ -18,19 +18,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Check auth status on app load
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem('token')
-      
-      if (!token) {
-        setLoading(false)
-        return
-      }
-
       try {
         const response = await api.getMe()
         setUser(response.user)
       } catch {
-        // Token invalid or expired
-        localStorage.removeItem('token')
+        setUser(null)
       } finally {
         setLoading(false)
       }
@@ -41,18 +33,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const response = await api.login(email, password)
-    localStorage.setItem('token', response.token)
     setUser(response.user)
   }
 
   const signup = async (name: string, email: string, password: string) => {
     const response = await api.signup(name, email, password)
-    localStorage.setItem('token', response.token)
     setUser(response.user)
   }
 
   const logout = () => {
-    localStorage.removeItem('token')
+    void api.logout().catch(() => undefined)
     setUser(null)
   }
 

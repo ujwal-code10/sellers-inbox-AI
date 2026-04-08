@@ -62,6 +62,11 @@ router.patch(
         return res.status(400).json({ error: "Value is required" });
       }
 
+      const serializedValue = JSON.stringify(value);
+      if (serializedValue.length > 20000) {
+        return res.status(400).json({ error: "Setting value is too large" });
+      }
+
       // Get current value
       const currentResult = await pool.query(
         `SELECT value FROM system_settings WHERE key = $1`,
@@ -79,7 +84,7 @@ router.patch(
         `UPDATE system_settings
          SET value = $1, updated_by = $2, updated_at = NOW()
          WHERE key = $3`,
-        [JSON.stringify(value), req.adminId, key]
+        [serializedValue, req.adminId, key]
       );
 
       await createAuditLog({

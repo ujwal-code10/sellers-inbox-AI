@@ -45,12 +45,7 @@ function validateAdminEnv(): { valid: boolean; warnings: string[] } {
 
   // ADMIN_JWT_SECRET is required for admin auth
   if (!process.env.ADMIN_JWT_SECRET) {
-    if (process.env.JWT_SECRET) {
-      // Fallback to JWT_SECRET if ADMIN_JWT_SECRET not set
-      warnings.push("ADMIN_JWT_SECRET not set - using JWT_SECRET as fallback (not recommended for production)");
-    } else {
-      warnings.push("Neither ADMIN_JWT_SECRET nor JWT_SECRET is set - admin auth will fail");
-    }
+    warnings.push("ADMIN_JWT_SECRET not set - admin auth will fail");
   } else if (process.env.ADMIN_JWT_SECRET.length < 32) {
     warnings.push("ADMIN_JWT_SECRET should be at least 32 characters for security");
   }

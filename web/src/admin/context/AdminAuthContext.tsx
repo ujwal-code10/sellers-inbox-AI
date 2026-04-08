@@ -15,28 +15,20 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('admin_token');
-    if (token) {
-      adminApi
-        .getMe()
-        .then(({ admin }) => setAdmin(admin))
-        .catch(() => {
-          localStorage.removeItem('admin_token');
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    adminApi
+      .getMe(true)
+      .then(({ admin }) => setAdmin(admin))
+      .catch(() => setAdmin(null))
+      .finally(() => setLoading(false));
   }, []);
 
   const login = async (email: string, password: string) => {
-    const { token, admin } = await adminApi.login(email, password);
-    localStorage.setItem('admin_token', token);
+    const { admin } = await adminApi.login(email, password);
     setAdmin(admin);
   };
 
   const logout = () => {
-    localStorage.removeItem('admin_token');
+    void adminApi.logout().catch(() => undefined);
     setAdmin(null);
     window.location.href = '/admin/login';
   };

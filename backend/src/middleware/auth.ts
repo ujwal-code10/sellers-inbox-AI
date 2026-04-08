@@ -1,4 +1,9 @@
 import jwt from "jsonwebtoken";
+import {
+  COOKIE_NAMES,
+  isSafeMethod,
+  validateCsrfForCookieRequest,
+} from "../utils/authSession.js";
 import { Request, Response, NextFunction } from "express";
 
 export interface AuthRequest extends Request {
@@ -12,14 +17,35 @@ export default function auth(
 ) {
   const header = req.headers.authorization;
 
-  if (!header) {
+  let tokenSource: "header" | "cookie" | null = null;
+  let token: string | null = null;
+
+  if (header && header.startsWith("Bearer ")) {
+    const parsedHeaderToken = header.split(" ")[1];
+    if (parsedHeaderToken) {
+      token = parsedHeaderToken;
+      tokenSource = "header";
+    }
+  }
+
+  if (!token) {
+    const cookieToken = req.cookies?.[COOKIE_NAMES.sellerAccess];
+    if (typeof cookieToken === "string" && cookieToken.length > 0) {
+      token = cookieToken;
+      tokenSource = "cookie";
+    }
+  }
+
+  if (!token) {
     return res.status(401).json({ error: "No token provided" });
   }
 
-  const token = header.split(" ")[1];
-
-  if (!token) {
-    return res.status(401).json({ error: "Malformed authorization header" });
+  if (
+    tokenSource === "cookie" &&
+    !isSafeMethod(req.method) &&
+    !validateCsrfForCookieRequest(req)
+  ) {
+    return res.status(403).json({ error: "Invalid CSRF token" });
   }
 
   try {
@@ -28,6 +54,10 @@ export default function auth(
     // Validate token payload structure
     if (!decoded.id || typeof decoded.id !== 'number' || decoded.id <= 0) {
       return res.status(401).json({ error: "Invalid token payload" });
+    }
+
+    if (decoded.type && decoded.type !== "user") {
+      return res.status(403).json({ error: "Invalid token type" });
     }
 
     req.userId = decoded.id;

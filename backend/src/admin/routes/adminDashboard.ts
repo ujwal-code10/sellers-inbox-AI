@@ -25,7 +25,10 @@ router.get("/", adminAuth, async (req: AdminRequest, res: Response) => {
 router.get("/users", adminAuth, async (req: AdminRequest, res: Response) => {
   try {
     const { days = "30" } = req.query;
-    const daysNum = Math.min(90, Math.max(7, parseInt(days as string, 10)));
+    const parsedDays = parseInt(days as string, 10);
+    const daysNum = Number.isFinite(parsedDays)
+      ? Math.min(90, Math.max(7, parsedDays))
+      : 30;
 
     const data = await getUserGrowth(daysNum);
     res.json({ data });
@@ -39,7 +42,10 @@ router.get("/users", adminAuth, async (req: AdminRequest, res: Response) => {
 router.get("/revenue", adminAuth, async (req: AdminRequest, res: Response) => {
   try {
     const { days = "30" } = req.query;
-    const daysNum = Math.min(90, Math.max(7, parseInt(days as string, 10)));
+    const parsedDays = parseInt(days as string, 10);
+    const daysNum = Number.isFinite(parsedDays)
+      ? Math.min(90, Math.max(7, parsedDays))
+      : 30;
 
     const data = await getRevenueMetrics(daysNum);
     res.json({ data });
@@ -53,7 +59,10 @@ router.get("/revenue", adminAuth, async (req: AdminRequest, res: Response) => {
 router.get("/ai", adminAuth, async (req: AdminRequest, res: Response) => {
   try {
     const { days = "30" } = req.query;
-    const daysNum = Math.min(90, Math.max(7, parseInt(days as string, 10)));
+    const parsedDays = parseInt(days as string, 10);
+    const daysNum = Number.isFinite(parsedDays)
+      ? Math.min(90, Math.max(7, parsedDays))
+      : 30;
 
     const data = await getAIUsageMetrics(daysNum);
     res.json({ data });

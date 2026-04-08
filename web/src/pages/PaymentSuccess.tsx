@@ -21,8 +21,7 @@ export default function PaymentSuccess() {
       localStorage.removeItem('esewa_billing')
       setStatus('success')
       redirectTimer = setTimeout(() => {
-        const hasToken = Boolean(localStorage.getItem('token'))
-        navigate(hasToken ? '/dashboard' : '/login', { replace: true })
+        navigate('/dashboard', { replace: true })
       }, 3000)
     }).catch(() => {
       setStatus('failed')

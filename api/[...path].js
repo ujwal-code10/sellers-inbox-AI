@@ -2,11 +2,9 @@ let app;
 try {
   app = require("../backend/dist/app").default;
 } catch (err) {
+  console.error("Function initialization failed:", err);
   module.exports = (req, res) => {
-    res.status(500).json({
-      error: "Function initialization failed",
-      details: err.message,
-    });
+    res.status(500).json({ error: "Function initialization failed" });
   };
 }
 if (app) {

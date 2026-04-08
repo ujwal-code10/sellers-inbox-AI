@@ -8,7 +8,6 @@ export interface User {
 }
 
 export interface AuthResponse {
-  token: string
   user: User
 }
 
@@ -109,29 +108,78 @@ export interface DeliveryZone {
 }
 
 class ApiClient {
-  private getToken(): string | null {
-    return localStorage.getItem('token')
+  private getCsrfToken(): string | null {
+    if (typeof document === 'undefined') {
+      return null
+    }
+
+    const match = document.cookie.match(/(?:^|; )sia_csrf=([^;]*)/)
+    return match ? decodeURIComponent(match[1]) : null
+  }
+
+  private isSafeMethod(method: string): boolean {
+    const normalized = method.toUpperCase()
+    return normalized === 'GET' || normalized === 'HEAD' || normalized === 'OPTIONS'
+  }
+
+  private shouldAttemptRefresh(endpoint: string): boolean {
+    const refreshExclusions = [
+      '/auth/login',
+      '/auth/signup',
+      '/auth/forgot-password',
+      '/auth/refresh',
+      '/auth/logout',
+    ]
+
+    return !refreshExclusions.some((path) => endpoint.startsWith(path))
+  }
+
+  private async refreshSession(): Promise<boolean> {
+    try {
+      const response = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+
+      return response.ok
+    } catch {
+      return false
+    }
   }
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    allowRetry: boolean = true
   ): Promise<T> {
-    const token = this.getToken()
+    const method = (options.method || 'GET').toUpperCase()
+    const csrfToken = this.getCsrfToken()
 
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
     }
 
-    if (token) {
-      ;(headers as Record<string, string>)['Authorization'] = `Bearer ${token}`
+    if (!this.isSafeMethod(method) && csrfToken) {
+      ;(headers as Record<string, string>)['X-CSRF-Token'] = csrfToken
     }
 
     const response = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
       headers,
+      credentials: 'include',
     })
+
+    if (
+      response.status === 401 &&
+      allowRetry &&
+      this.shouldAttemptRefresh(endpoint)
+    ) {
+      const refreshed = await this.refreshSession()
+      if (refreshed) {
+        return this.request<T>(endpoint, options, false)
+      }
+    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Request failed' }))
@@ -160,6 +208,12 @@ class ApiClient {
     return this.request<ForgotPasswordResponse>('/auth/forgot-password', {
       method: 'POST',
       body: JSON.stringify({ email }),
+    })
+  }
+
+  async logout(): Promise<void> {
+    await this.request('/auth/logout', {
+      method: 'POST',
     })
   }
 

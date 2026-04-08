@@ -1,5 +1,6 @@
 import express from "express";
 import crypto from "crypto";
+import rateLimit from "express-rate-limit";
 import pool from "../utils/db.js";
 import auth, { AuthRequest } from "../middleware/auth.js";
 import { getEffectiveFreeTierLimits } from "../utils/freeTierLimits.js";
@@ -18,6 +19,27 @@ const PLAN_PRICES = {
   pro_monthly: 299,
   pro_yearly: 2499,
 };
+
+const manualQrSubmitRateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  message: {
+    error:
+      "Too many manual payment submissions. Please wait a few minutes and try again.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const esewaVerifyRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: {
+    error: "Too many payment verification requests. Please try again shortly.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 function normalizeManualQrImageUrl(rawUrl?: string | null): string | null {
   if (!rawUrl) {
@@ -287,7 +309,11 @@ router.get("/manual-qr/status", auth, async (req: AuthRequest, res) => {
  * POST /api/payments/manual-qr/submit
  * Submits manual QR payment reference for verification
  */
-router.post("/manual-qr/submit", auth, async (req: AuthRequest, res) => {
+router.post(
+  "/manual-qr/submit",
+  manualQrSubmitRateLimiter,
+  auth,
+  async (req: AuthRequest, res) => {
   if (!isManualQrConfigured()) {
     return res.status(503).json({
       error:
@@ -433,7 +459,8 @@ router.post("/manual-qr/submit", auth, async (req: AuthRequest, res) => {
   } finally {
     client.release();
   }
-});
+  }
+);
 
 /**
  * POST /api/payments/esewa/initiate
@@ -484,7 +511,10 @@ router.post("/esewa/initiate", auth, async (req: AuthRequest, res) => {
  * POST /api/payments/esewa/verify
  * Called after eSewa redirects back with encoded data
  */
-router.post("/esewa/verify", async (req: express.Request, res) => {
+router.post(
+  "/esewa/verify",
+  esewaVerifyRateLimiter,
+  async (req: express.Request, res) => {
   if (!isEsewaConfigured()) {
     return res.status(503).json({
       error: "eSewa is not configured on the server.",
@@ -693,6 +723,7 @@ router.post("/esewa/verify", async (req: express.Request, res) => {
     console.error("eSewa verify error:", err);
     res.status(500).json({ error: "Verification failed" });
   }
-});
+  }
+);
 
 export default router;
