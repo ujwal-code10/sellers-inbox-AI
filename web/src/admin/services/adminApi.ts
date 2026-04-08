@@ -113,6 +113,13 @@ export interface DashboardData {
   };
 }
 
+export interface CreateAdminPayload {
+  name: string;
+  email: string;
+  password: string;
+  role?: 'admin' | 'super_admin';
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   pagination: {
@@ -234,6 +241,20 @@ class AdminApiClient {
     return this.request<{ message: string }>('/auth/change-password', {
       method: 'POST',
       body: JSON.stringify({ oldPassword, newPassword }),
+    });
+  }
+
+  async changeEmail(currentPassword: string, newEmail: string) {
+    return this.request<{ message: string }>('/auth/change-email', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newEmail }),
+    });
+  }
+
+  async createAdminUser(payload: CreateAdminPayload) {
+    return this.request<{ message: string; admin: AdminUser }>('/auth/create-admin', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   }
 

@@ -1,11 +1,12 @@
 import { useState, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { Eye, EyeOff, Lock01, Mail01, Shield03 } from '@untitledui/icons';
 import { useAdminAuth } from '../context/AdminAuthContext';
-import '../styles/admin.css';
 
 export function AdminLogin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAdminAuth();
@@ -60,65 +61,76 @@ export function AdminLogin() {
   };
 
   return (
-    <div className="admin-root">
-      <div className="admin-login-page">
-        <div className="admin-login-card">
-          <div className="admin-login-header">
-            <div className="admin-sidebar-brand admin-login-brand">
-              <span className="admin-sidebar-brand-dot" />
-              <span>
-                <span className="admin-sidebar-logo">Seller Inbox</span>
-                <span className="admin-sidebar-subtitle">Admin Panel</span>
-              </span>
-            </div>
-            <h1 className="admin-login-title">Admin Login</h1>
-            <p className="admin-login-subtitle">
-              Sign in to access the admin panel
-            </p>
-          </div>
+    <div className="auth-container">
+      <div className="auth-card">
+        <div className="auth-header">
+          <div className="auth-logo-badge">ADM</div>
+          <h1>Admin portal login</h1>
+          <p>Secure access for authorized team members only.</p>
+        </div>
 
-          {error && <div className="admin-login-error">{error}</div>}
+        <form onSubmit={handleSubmit} className="auth-form">
+          {error && <div className="error-message">{error}</div>}
 
-          <form onSubmit={handleSubmit}>
-            <div className="admin-input-group">
-              <label className="admin-input-label" htmlFor="email">
-                Email
-              </label>
+          <div className="form-group">
+            <label htmlFor="email">Email</label>
+            <div className="auth-input-wrap">
+              <Mail01 className="auth-input-icon" />
               <input
                 id="email"
                 type="email"
-                className="admin-input"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@example.com"
                 required
                 autoFocus
+                autoComplete="email"
               />
             </div>
+          </div>
 
-            <div className="admin-input-group">
-              <label className="admin-input-label" htmlFor="password">
-                Password
-              </label>
+          <div className="form-group">
+            <label htmlFor="password">Password</label>
+            <div className="auth-input-wrap">
+              <Lock01 className="auth-input-icon" />
               <input
                 id="password"
-                type="password"
-                className="admin-input"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
+                placeholder="••••••••"
                 required
+                autoComplete="current-password"
+                className="auth-input-with-toggle"
               />
+              <button
+                type="button"
+                className="auth-visibility-toggle"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? (
+                  <EyeOff className="auth-visibility-icon" />
+                ) : (
+                  <Eye className="auth-visibility-icon" />
+                )}
+              </button>
             </div>
+          </div>
 
-            <button
-              type="submit"
-              className="admin-btn admin-btn-primary admin-login-submit"
-              disabled={loading}
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-          </form>
+          <button type="submit" className="btn-primary" disabled={loading}>
+            {loading ? 'Signing in...' : 'Sign in to admin'}
+          </button>
+        </form>
+
+        <div className="auth-footer">
+          <p>
+            Need admin access? Contact a super admin.
+          </p>
+          <p>
+            <Shield03 className="auth-visibility-icon" style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />
+            <Link to="/login">Back to seller login</Link>
+          </p>
         </div>
       </div>
     </div>
