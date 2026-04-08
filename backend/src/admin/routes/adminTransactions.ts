@@ -22,8 +22,19 @@ function getBillingFromMetadata(metadata: Record<string, unknown>): BillingCycle
   return metadata.billing === "yearly" ? "yearly" : "monthly";
 }
 
-function calculateExpiryDate(billing: BillingCycle): Date {
-  const expiresAt = new Date();
+function calculateExtendedExpiryDate(
+  billing: BillingCycle,
+  currentExpiresAt?: Date | string | null
+): Date {
+  const now = new Date();
+  const parsedCurrent = currentExpiresAt ? new Date(currentExpiresAt) : null;
+
+  const baseDate =
+    parsedCurrent && !isNaN(parsedCurrent.getTime()) && parsedCurrent > now
+      ? parsedCurrent
+      : now;
+
+  const expiresAt = new Date(baseDate);
   if (billing === "yearly") {
     expiresAt.setFullYear(expiresAt.getFullYear() + 1);
   } else {
@@ -180,13 +191,16 @@ router.post(
 
       const metadata = normalizeMetadata(transaction.metadata);
       const billing = getBillingFromMetadata(metadata);
-      const expiresAt = calculateExpiryDate(billing);
 
       const previousSubscriptionResult = await client.query(
         `SELECT * FROM subscriptions WHERE user_id = $1`,
         [transaction.user_id]
       );
       const oldSubscription = previousSubscriptionResult.rows[0] || null;
+      const expiresAt = calculateExtendedExpiryDate(
+        billing,
+        oldSubscription?.expires_at || null
+      );
 
       const reviewedMetadata = {
         ...metadata,

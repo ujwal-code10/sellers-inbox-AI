@@ -111,7 +111,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                   <div className="admin-avatar">
                     {admin.name.charAt(0).toUpperCase()}
                   </div>
-                  <span style={{ fontSize: '14px', color: 'var(--admin-color-text)' }}>
+                  <span className="admin-topbar-user-name">
                     {admin.name}
                   </span>
                 </div>

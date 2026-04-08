@@ -34,7 +34,12 @@ export interface PlanResponse {
     products_limit: number | null
   }
   plans: {
-    free: { price: number; replies_per_day: number; products: number }
+    free: {
+      price: number
+      replies_per_day: number
+      products: number
+      mode?: 'trust' | 'enforced'
+    }
     pro_monthly: { price: number; replies_per_day: null; products: null }
     pro_yearly: { price: number; replies_per_day: null; products: null }
   }
@@ -59,9 +64,23 @@ export interface ManualQrSubmitResponse {
   status: 'pending_review'
   transaction_id: number
   amount: number
+  submitted_at?: string
   requires_admin_approval?: boolean
   access_activated?: boolean
   message: string
+}
+
+export interface ManualQrStatusResponse {
+  pending: boolean
+  request?: {
+    transaction_id: number
+    amount: number
+    payment_reference: string
+    billing: BillingCycle
+    payer_name?: string | null
+    note?: string | null
+    submitted_at: string
+  }
 }
 
 export interface Product {
@@ -269,6 +288,10 @@ class ApiClient {
     return this.request<ManualQrConfigResponse>('/payments/manual-qr/config')
   }
 
+  async getManualQrStatus(): Promise<ManualQrStatusResponse> {
+    return this.request<ManualQrStatusResponse>('/payments/manual-qr/status')
+  }
+
   async submitManualQrPayment(payload: {
     billing: BillingCycle
     paymentReference: string
@@ -281,10 +304,13 @@ class ApiClient {
     })
   }
 
-  async verifyEsewa(encodedData: string, billing: string): Promise<any> {
+  async verifyEsewa(encodedData: string, billing?: string): Promise<any> {
+    const payload: Record<string, string> = { encodedData }
+    if (billing) payload.billing = billing
+
     return this.request('/payments/esewa/verify', {
       method: 'POST',
-      body: JSON.stringify({ encodedData, billing }),
+      body: JSON.stringify(payload),
     })
   }
 }

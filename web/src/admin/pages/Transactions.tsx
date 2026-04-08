@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AdminLayout } from '../components/layout/AdminLayout';
 import { adminApi, Transaction, PaginatedResponse } from '../services/adminApi';
+import { SectionHeader } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import '../styles/admin.css';
 
@@ -143,8 +144,20 @@ export function Transactions() {
   return (
     <AdminLayout>
       <div className="admin-page-header">
-        <h1 className="admin-page-title">Transactions</h1>
-        <p className="admin-page-subtitle">View all payment transactions</p>
+        <SectionHeader
+          title="Transactions"
+          subtitle="View and verify payment activity"
+          actions={(
+            <button
+              className="admin-btn admin-btn-secondary admin-btn-sm"
+              type="button"
+              onClick={() => loadTransactions()}
+              disabled={loading || actionLoading}
+            >
+              Refresh
+            </button>
+          )}
+        />
       </div>
 
       <div className="admin-card">
@@ -234,16 +247,14 @@ export function Transactions() {
                       <td>
                         {tx.user_name ? (
                           <div>
-                            <div style={{ fontWeight: 500 }}>{tx.user_name}</div>
-                            <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)' }}>
-                              {tx.user_email}
-                            </div>
+                            <div className="admin-user-name">{tx.user_name}</div>
+                            <div className="admin-user-email">{tx.user_email}</div>
                           </div>
                         ) : (
-                          <span style={{ color: 'var(--admin-color-text-muted)' }}>Deleted user</span>
+                          <span className="admin-muted">Deleted user</span>
                         )}
                       </td>
-                      <td style={{ textTransform: 'capitalize' }}>{tx.type}</td>
+                      <td className="admin-capitalize">{tx.type}</td>
                       <td>Rs. {tx.amount}</td>
                       <td>
                         <span className={`admin-badge ${getStatusBadge(tx.status)}`}>
@@ -254,7 +265,7 @@ export function Transactions() {
                       <td>{formatDate(tx.created_at)}</td>
                       <td>
                         {isManualQrPending(tx) ? (
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <div className="admin-flex-wrap">
                             <button
                               className="admin-btn admin-btn-primary admin-btn-sm"
                               onClick={() => {
@@ -277,7 +288,7 @@ export function Transactions() {
                             </button>
                           </div>
                         ) : (
-                          <span style={{ fontSize: 12, color: 'var(--admin-color-text-muted)' }}>
+                          <span className="admin-text-xs admin-muted">
                             No action
                           </span>
                         )}
@@ -331,38 +342,38 @@ export function Transactions() {
               </p>
             </div>
             <div className="admin-modal-body">
-              <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Transaction</span>
-                  <strong>#{approveTarget.id}</strong>
+              <div className="admin-kv-list">
+                <div className="admin-kv-row">
+                  <span className="admin-kv-label">Transaction</span>
+                  <strong className="admin-kv-value">#{approveTarget.id}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>User</span>
-                  <strong>{approveTarget.user_name || `User #${approveTarget.user_id || 'N/A'}`}</strong>
+                <div className="admin-kv-row">
+                  <span className="admin-kv-label">User</span>
+                  <strong className="admin-kv-value">{approveTarget.user_name || `User #${approveTarget.user_id || 'N/A'}`}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Amount</span>
-                  <strong>Rs. {approveTarget.amount}</strong>
+                <div className="admin-kv-row">
+                  <span className="admin-kv-label">Amount</span>
+                  <strong className="admin-kv-value">Rs. {approveTarget.amount}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Billing</span>
-                  <strong>{getBillingLabel(approveTarget)}</strong>
+                <div className="admin-kv-row">
+                  <span className="admin-kv-label">Billing</span>
+                  <strong className="admin-kv-value">{getBillingLabel(approveTarget)}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Reference</span>
-                  <strong>{approveTarget.payment_ref || 'N/A'}</strong>
+                <div className="admin-kv-row">
+                  <span className="admin-kv-label">Reference</span>
+                  <strong className="admin-kv-value">{approveTarget.payment_ref || 'N/A'}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Payer name</span>
-                  <strong>{String(approveTarget.metadata?.payer_name || 'N/A')}</strong>
+                <div className="admin-kv-row">
+                  <span className="admin-kv-label">Payer name</span>
+                  <strong className="admin-kv-value">{String(approveTarget.metadata?.payer_name || 'N/A')}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Submitted note</span>
-                  <strong>{String(approveTarget.metadata?.note || 'N/A')}</strong>
+                <div className="admin-kv-row">
+                  <span className="admin-kv-label">Submitted note</span>
+                  <strong className="admin-kv-value">{String(approveTarget.metadata?.note || 'N/A')}</strong>
                 </div>
               </div>
 
-              <div className="admin-input-group" style={{ marginBottom: 0 }}>
+              <div className="admin-input-group">
                 <label className="admin-input-label">Approval note (optional)</label>
                 <input
                   type="text"
@@ -396,30 +407,30 @@ export function Transactions() {
               </p>
             </div>
             <div className="admin-modal-body">
-              <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Transaction</span>
-                  <strong>#{rejectTarget.id}</strong>
+              <div className="admin-kv-list">
+                <div className="admin-kv-row">
+                  <span className="admin-kv-label">Transaction</span>
+                  <strong className="admin-kv-value">#{rejectTarget.id}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>User</span>
-                  <strong>{rejectTarget.user_name || `User #${rejectTarget.user_id || 'N/A'}`}</strong>
+                <div className="admin-kv-row">
+                  <span className="admin-kv-label">User</span>
+                  <strong className="admin-kv-value">{rejectTarget.user_name || `User #${rejectTarget.user_id || 'N/A'}`}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Reference</span>
-                  <strong>{rejectTarget.payment_ref || 'N/A'}</strong>
+                <div className="admin-kv-row">
+                  <span className="admin-kv-label">Reference</span>
+                  <strong className="admin-kv-value">{rejectTarget.payment_ref || 'N/A'}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Payer name</span>
-                  <strong>{String(rejectTarget.metadata?.payer_name || 'N/A')}</strong>
+                <div className="admin-kv-row">
+                  <span className="admin-kv-label">Payer name</span>
+                  <strong className="admin-kv-value">{String(rejectTarget.metadata?.payer_name || 'N/A')}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span style={{ color: 'var(--admin-color-text-secondary)' }}>Submitted note</span>
-                  <strong>{String(rejectTarget.metadata?.note || 'N/A')}</strong>
+                <div className="admin-kv-row">
+                  <span className="admin-kv-label">Submitted note</span>
+                  <strong className="admin-kv-value">{String(rejectTarget.metadata?.note || 'N/A')}</strong>
                 </div>
               </div>
 
-              <div className="admin-input-group" style={{ marginBottom: 0 }}>
+              <div className="admin-input-group">
                 <label className="admin-input-label">Reason for rejection</label>
                 <textarea
                   className="admin-input"

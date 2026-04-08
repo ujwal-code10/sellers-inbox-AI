@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { api, type PlanResponse, type ManualQrConfigResponse, type BillingCycle } from '../services/api'
+import { api, type PlanResponse, type ManualQrConfigResponse, type BillingCycle, type ManualQrStatusResponse } from '../services/api'
 
 interface UpgradeProps {
   initialPlanData?: PlanResponse | null
   initialQrConfig?: ManualQrConfigResponse | null
   onPaymentDataLoaded?: (payload: { plan: PlanResponse; qrConfig: ManualQrConfigResponse }) => void
 }
+
+type PendingManualRequest = NonNullable<ManualQrStatusResponse['request']>
 
 function normalizeQrImageUrl(rawUrl?: string | null): string | null {
   if (!rawUrl) return null
@@ -43,6 +45,7 @@ export default function Upgrade({
     amount: number
     message: string
   } | null>(null)
+  const [pendingManualRequest, setPendingManualRequest] = useState<PendingManualRequest | null>(null)
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
@@ -66,13 +69,15 @@ export default function Upgrade({
     setLoading(true)
     setErrorMessage('')
     try {
-      const [data, config] = await Promise.all([
+      const [data, config, manualStatus] = await Promise.all([
         api.getPlans(),
         api.getManualQrConfig(),
+        api.getManualQrStatus(),
       ])
 
       setPlanData(data)
       setQrConfig(config)
+      setPendingManualRequest(manualStatus.pending ? manualStatus.request || null : null)
       onPaymentDataLoaded?.({ plan: data, qrConfig: config })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not load payment options'
@@ -83,6 +88,11 @@ export default function Upgrade({
   }
 
   const handleSubmitManualQr = async () => {
+    if (pendingManualRequest) {
+      setErrorMessage('You already have a pending QR request. Please wait for admin verification.')
+      return
+    }
+
     const reference = paymentReference.trim()
     const payer = payerName.trim()
 
@@ -116,6 +126,22 @@ export default function Upgrade({
         amount: result.amount,
         message: result.message,
       })
+
+      try {
+        const manualStatus = await api.getManualQrStatus()
+        setPendingManualRequest(manualStatus.pending ? manualStatus.request || null : null)
+      } catch {
+        setPendingManualRequest({
+          transaction_id: result.transaction_id,
+          amount: result.amount,
+          payment_reference: reference,
+          billing: selectedBilling,
+          payer_name: payer,
+          note: manualNote.trim() || null,
+          submitted_at: result.submitted_at || new Date().toISOString(),
+        })
+      }
+
       setPaymentReference('')
       setPayerName('')
       setManualNote('')
@@ -146,6 +172,10 @@ export default function Upgrade({
     ? (qrConfig?.amounts.yearly ?? planData?.plans.pro_yearly.price ?? 2499)
     : (qrConfig?.amounts.monthly ?? planData?.plans.pro_monthly.price ?? 299)
   const qrImageUrl = normalizeQrImageUrl(qrConfig?.qr_image_url)
+  const hasPendingManualRequest = Boolean(pendingManualRequest)
+  const pendingSubmittedAtLabel = pendingManualRequest?.submitted_at
+    ? new Date(pendingManualRequest.submitted_at).toLocaleString()
+    : null
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto', padding: '2rem 1rem' }}>
@@ -343,6 +373,33 @@ export default function Upgrade({
               </div>
             </div>
 
+            {hasPendingManualRequest ? (
+              <div style={{
+                border: '1px solid #fde68a',
+                background: '#fffbeb',
+                color: '#8a5a00',
+                borderRadius: 10,
+                padding: '10px 12px',
+                marginBottom: 14,
+                fontSize: 13,
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                  Payment request pending verification
+                </div>
+                <div>
+                  Request ID: #{pendingManualRequest?.transaction_id} • Amount: Rs. {Number(pendingManualRequest?.amount || 0).toLocaleString()} • Billing: {pendingManualRequest?.billing === 'yearly' ? 'Yearly' : 'Monthly'}
+                </div>
+                {pendingSubmittedAtLabel ? (
+                  <div style={{ marginTop: 4 }}>
+                    Submitted: {pendingSubmittedAtLabel}
+                  </div>
+                ) : null}
+                <div style={{ marginTop: 6, fontWeight: 700 }}>
+                  You cannot submit another request until this one is approved or rejected.
+                </div>
+              </div>
+            ) : null}
+
             {qrImageUrl ? (
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
                 <img
@@ -421,6 +478,7 @@ export default function Upgrade({
                 placeholder="Payment reference ID (required)"
                 value={paymentReference}
                 onChange={(e) => setPaymentReference(e.target.value)}
+                disabled={hasPendingManualRequest || submittingQr}
                 style={{
                   width: '100%',
                   border: '1px solid #d5e1dc',
@@ -434,6 +492,7 @@ export default function Upgrade({
                 placeholder="Payer name (required)"
                 value={payerName}
                 onChange={(e) => setPayerName(e.target.value)}
+                disabled={hasPendingManualRequest || submittingQr}
                 style={{
                   width: '100%',
                   border: '1px solid #d5e1dc',
@@ -447,6 +506,7 @@ export default function Upgrade({
                 value={manualNote}
                 onChange={(e) => setManualNote(e.target.value)}
                 rows={3}
+                disabled={hasPendingManualRequest || submittingQr}
                 style={{
                   width: '100%',
                   border: '1px solid #d5e1dc',
@@ -460,20 +520,24 @@ export default function Upgrade({
               <button
                 type="button"
                 onClick={handleSubmitManualQr}
-                disabled={submittingQr}
+                disabled={submittingQr || hasPendingManualRequest}
                 style={{
                   width: '100%',
                   padding: '13px 0',
                   borderRadius: 12,
                   border: 'none',
-                  background: submittingQr ? '#c8cecb' : '#1D9E75',
+                  background: submittingQr || hasPendingManualRequest ? '#c8cecb' : '#1D9E75',
                   color: '#fff',
                   fontWeight: 700,
                   fontSize: 14,
-                  cursor: submittingQr ? 'not-allowed' : 'pointer',
+                  cursor: submittingQr || hasPendingManualRequest ? 'not-allowed' : 'pointer',
                 }}
               >
-                {submittingQr ? 'Submitting...' : 'Submit for verification'}
+                {submittingQr
+                  ? 'Submitting...'
+                  : hasPendingManualRequest
+                    ? 'Pending admin verification'
+                    : 'Submit for verification'}
               </button>
             </div>
 

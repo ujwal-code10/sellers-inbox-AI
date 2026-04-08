@@ -4,8 +4,11 @@
   "outputDirectory": "web/dist",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/[...path]" },
+    { "source": "/admin", "destination": "/app.html" },
+    { "source": "/admin/(.*)", "destination": "/app.html" },
     { "source": "/login", "destination": "/app.html" },
     { "source": "/signup", "destination": "/app.html" },
+    { "source": "/forgot-password", "destination": "/app.html" },
     { "source": "/dashboard", "destination": "/app.html" },
     { "source": "/upgrade", "destination": "/app.html" },
     { "source": "/payment/(.*)", "destination": "/app.html" },

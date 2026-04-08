@@ -64,7 +64,7 @@ export function AdminLogin() {
       <div className="admin-login-page">
         <div className="admin-login-card">
           <div className="admin-login-header">
-            <div className="admin-sidebar-brand" style={{ justifyContent: 'center', marginBottom: 10 }}>
+            <div className="admin-sidebar-brand admin-login-brand">
               <span className="admin-sidebar-brand-dot" />
               <span>
                 <span className="admin-sidebar-logo">Seller Inbox</span>
@@ -113,8 +113,7 @@ export function AdminLogin() {
 
             <button
               type="submit"
-              className="admin-btn admin-btn-primary"
-              style={{ width: '100%', marginTop: '8px' }}
+              className="admin-btn admin-btn-primary admin-login-submit"
               disabled={loading}
             >
               {loading ? 'Signing in...' : 'Sign In'}

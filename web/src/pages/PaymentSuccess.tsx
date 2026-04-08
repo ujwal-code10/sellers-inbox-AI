@@ -9,21 +9,31 @@ export default function PaymentSuccess() {
 
   useEffect(() => {
     const encodedData = searchParams.get('data')
-    const billing = localStorage.getItem('esewa_billing') || 'monthly'
+    const billingHint = localStorage.getItem('esewa_billing') || undefined
+    let redirectTimer: ReturnType<typeof setTimeout> | null = null
 
     if (!encodedData) {
       setStatus('failed')
       return
     }
 
-    api.verifyEsewa(encodedData, billing).then(() => {
+    api.verifyEsewa(encodedData, billingHint).then(() => {
       localStorage.removeItem('esewa_billing')
       setStatus('success')
-      setTimeout(() => navigate('/'), 3000)
+      redirectTimer = setTimeout(() => {
+        const hasToken = Boolean(localStorage.getItem('token'))
+        navigate(hasToken ? '/dashboard' : '/login', { replace: true })
+      }, 3000)
     }).catch(() => {
       setStatus('failed')
     })
-  }, [])
+
+    return () => {
+      if (redirectTimer) {
+        clearTimeout(redirectTimer)
+      }
+    }
+  }, [navigate, searchParams])
 
   return (
     <div style={{

@@ -93,7 +93,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS ban_reason TEXT;
 
 -- 7. Insert default system settings
 INSERT INTO system_settings (key, value, description) VALUES
-    ('free_tier_limits', '{"daily_replies": 20, "max_products": 5}', 'Free tier usage limits'),
+    ('free_tier_limits', '{"daily_replies": 20, "max_products": 5, "enforce": false, "mode": "trust"}', 'Free tier usage limits and enforcement mode'),
     ('pro_pricing', '{"monthly": 299, "yearly": 2499}', 'Pro plan pricing in NPR'),
     ('ai_config', '{"model": "llama-3.3-70b-versatile", "temperature": 0.3}', 'AI model configuration'),
     ('maintenance_mode', '{"enabled": false, "message": ""}', 'Maintenance mode settings')

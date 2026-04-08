@@ -33,8 +33,8 @@ function log(message: string, color: keyof typeof colors = "reset") {
 const DEFAULT_SETTINGS = [
   {
     key: "free_tier_limits",
-    value: { daily_replies: 20, max_products: 5 },
-    description: "Free tier usage limits",
+    value: { daily_replies: 20, max_products: 5, enforce: false, mode: "trust" },
+    description: "Free tier usage limits and enforcement mode",
   },
   {
     key: "pro_pricing",

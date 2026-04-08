@@ -2,13 +2,13 @@ import express from "express";
 import crypto from "crypto";
 import pool from "../utils/db.js";
 import auth, { AuthRequest } from "../middleware/auth.js";
+import { getEffectiveFreeTierLimits } from "../utils/freeTierLimits.js";
 
 const router = express.Router();
 
 // eSewa config
 const ESEWA_MERCHANT_CODE = process.env.ESEWA_MERCHANT_CODE || "EPAYTEST";
-// CRITICAL: No fallback for production - must be set in environment
-const ESEWA_SECRET_KEY = process.env.ESEWA_SECRET_KEY!;
+const ESEWA_SECRET_KEY = process.env.ESEWA_SECRET_KEY || "";
 const ESEWA_VERIFY_URL =
   process.env.NODE_ENV === "production"
     ? "https://epay.esewa.com.np/api/epay/transaction/status/"
@@ -45,18 +45,100 @@ function normalizeManualQrImageUrl(rawUrl?: string | null): string | null {
   return `/${sanitizedPath}`;
 }
 
+type BillingCycle = "monthly" | "yearly";
+
+interface ParsedEsewaTransactionUuid {
+  userId: number | null;
+  billing: BillingCycle | null;
+}
+
+const MANUAL_QR_RECEIVER_ID_PLACEHOLDER = "Configure MANUAL_QR_RECEIVER_ID";
+
 const MANUAL_QR_IMAGE_URL = normalizeManualQrImageUrl(
   process.env.MANUAL_QR_IMAGE_URL || null
 );
 const MANUAL_QR_RECEIVER_NAME =
   process.env.MANUAL_QR_RECEIVER_NAME || "Seller Inbox AI";
 const MANUAL_QR_RECEIVER_ID =
-  process.env.MANUAL_QR_RECEIVER_ID || "Configure MANUAL_QR_RECEIVER_ID";
+  process.env.MANUAL_QR_RECEIVER_ID || MANUAL_QR_RECEIVER_ID_PLACEHOLDER;
 const MANUAL_QR_SUPPORT_TEXT =
   process.env.MANUAL_QR_SUPPORT_TEXT ||
   "Submit your payment reference after transfer. Our team verifies and activates Pro quickly.";
 
-type BillingCycle = "monthly" | "yearly";
+function isEsewaConfigured(): boolean {
+  return Boolean(ESEWA_SECRET_KEY);
+}
+
+function isManualQrConfigured(): boolean {
+  return (
+    Boolean(MANUAL_QR_IMAGE_URL) &&
+    Boolean(MANUAL_QR_RECEIVER_ID) &&
+    MANUAL_QR_RECEIVER_ID !== MANUAL_QR_RECEIVER_ID_PLACEHOLDER
+  );
+}
+
+function normalizeManualReference(reference: string): string {
+  return reference.trim().toUpperCase();
+}
+
+function parseBillingCycle(value: unknown): BillingCycle | null {
+  if (value === "monthly" || value === "yearly") {
+    return value;
+  }
+  return null;
+}
+
+function parseEsewaTransactionUuid(
+  rawValue: unknown
+): ParsedEsewaTransactionUuid {
+  if (typeof rawValue !== "string") {
+    return { userId: null, billing: null };
+  }
+
+  const parts = rawValue.split("-");
+  if (parts.length < 4 || parts[0] !== "SIA") {
+    return { userId: null, billing: null };
+  }
+
+  const userId = parseInt(parts[1], 10);
+  if (isNaN(userId) || userId <= 0) {
+    return { userId: null, billing: null };
+  }
+
+  const billing = parseBillingCycle(parts[2]);
+
+  return {
+    userId,
+    billing,
+  };
+}
+
+function calculateExpiryDate(
+  billing: BillingCycle,
+  currentExpiresAt?: Date | string | null
+): Date {
+  const now = new Date();
+
+  const parsedCurrentExpiry = currentExpiresAt
+    ? new Date(currentExpiresAt)
+    : null;
+
+  const baseDate =
+    parsedCurrentExpiry &&
+    !isNaN(parsedCurrentExpiry.getTime()) &&
+    parsedCurrentExpiry > now
+      ? parsedCurrentExpiry
+      : now;
+
+  const nextExpiry = new Date(baseDate);
+  if (billing === "yearly") {
+    nextExpiry.setFullYear(nextExpiry.getFullYear() + 1);
+  } else {
+    nextExpiry.setMonth(nextExpiry.getMonth() + 1);
+  }
+
+  return nextExpiry;
+}
 
 function getPlanAmount(billing: BillingCycle): number {
   return billing === "yearly" ? PLAN_PRICES.pro_yearly : PLAN_PRICES.pro_monthly;
@@ -76,6 +158,8 @@ function generateSignature(message: string, secret: string): string {
  */
 router.get("/plans", auth, async (req: AuthRequest, res) => {
   try {
+    const limits = await getEffectiveFreeTierLimits();
+
     const subRes = await pool.query(
       `SELECT plan, billing, status, expires_at FROM subscriptions
        WHERE user_id = $1`,
@@ -108,12 +192,17 @@ router.get("/plans", auth, async (req: AuthRequest, res) => {
       },
       usage: {
         replies_today: repliesUsedToday,
-        replies_limit: sub?.plan === "pro" ? null : 20,
+        replies_limit: sub?.plan === "pro" ? null : limits.dailyReplies,
         products: productCount,
-        products_limit: sub?.plan === "pro" ? null : 5,
+        products_limit: sub?.plan === "pro" ? null : limits.maxProducts,
       },
       plans: {
-        free: { price: 0, replies_per_day: 20, products: 5 },
+        free: {
+          price: 0,
+          replies_per_day: limits.dailyReplies,
+          products: limits.maxProducts,
+          mode: limits.enforced ? "enforced" : "trust",
+        },
         pro_monthly: { price: 299, replies_per_day: null, products: null },
         pro_yearly: { price: 2499, replies_per_day: null, products: null },
       },
@@ -129,8 +218,10 @@ router.get("/plans", auth, async (req: AuthRequest, res) => {
  * Returns manual QR payment configuration
  */
 router.get("/manual-qr/config", auth, async (_req: AuthRequest, res) => {
+  const configured = isManualQrConfigured();
+
   res.json({
-    enabled: Boolean(MANUAL_QR_IMAGE_URL),
+    enabled: configured,
     qr_image_url: MANUAL_QR_IMAGE_URL,
     receiver_name: MANUAL_QR_RECEIVER_NAME,
     receiver_id: MANUAL_QR_RECEIVER_ID,
@@ -143,10 +234,67 @@ router.get("/manual-qr/config", auth, async (_req: AuthRequest, res) => {
 });
 
 /**
+ * GET /api/payments/manual-qr/status
+ * Returns latest pending manual QR request for current user
+ */
+router.get("/manual-qr/status", auth, async (req: AuthRequest, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, amount, payment_ref, metadata, created_at
+       FROM transactions
+       WHERE user_id = $1
+         AND type = 'subscription'
+         AND payment_method = 'manual_qr'
+         AND status = 'pending'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [req.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({ pending: false });
+    }
+
+    const row = result.rows[0];
+    const metadata =
+      row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+
+    const submittedAt =
+      typeof metadata.submitted_at === "string"
+        ? metadata.submitted_at
+        : row.created_at;
+
+    return res.json({
+      pending: true,
+      request: {
+        transaction_id: row.id,
+        amount: Number(row.amount) || 0,
+        payment_reference: row.payment_ref,
+        billing: metadata.billing === "yearly" ? "yearly" : "monthly",
+        payer_name:
+          typeof metadata.payer_name === "string" ? metadata.payer_name : null,
+        note: typeof metadata.note === "string" ? metadata.note : null,
+        submitted_at: submittedAt,
+      },
+    });
+  } catch (err) {
+    console.error("Manual QR status error:", err);
+    return res.status(500).json({ error: "Could not load payment status" });
+  }
+});
+
+/**
  * POST /api/payments/manual-qr/submit
  * Submits manual QR payment reference for verification
  */
 router.post("/manual-qr/submit", auth, async (req: AuthRequest, res) => {
+  if (!isManualQrConfigured()) {
+    return res.status(503).json({
+      error:
+        "Manual QR payments are not configured yet on the server. Please contact support.",
+    });
+  }
+
   const { billing, paymentReference, payerName, note } = req.body as {
     billing?: BillingCycle;
     paymentReference?: string;
@@ -154,7 +302,9 @@ router.post("/manual-qr/submit", auth, async (req: AuthRequest, res) => {
     note?: string;
   };
 
-  if (!billing || !["monthly", "yearly"].includes(billing)) {
+  const parsedBilling = parseBillingCycle(billing);
+
+  if (!parsedBilling) {
     return res.status(400).json({ error: "billing must be monthly or yearly" });
   }
 
@@ -162,7 +312,7 @@ router.post("/manual-qr/submit", auth, async (req: AuthRequest, res) => {
     return res.status(400).json({ error: "paymentReference is required" });
   }
 
-  const cleanedReference = paymentReference.trim();
+  const cleanedReference = normalizeManualReference(paymentReference);
   if (cleanedReference.length < 4 || cleanedReference.length > 80) {
     return res
       .status(400)
@@ -187,9 +337,20 @@ router.post("/manual-qr/submit", auth, async (req: AuthRequest, res) => {
   const cleanedNote =
     typeof note === "string" && note.trim() ? note.trim().slice(0, 300) : null;
 
+  const client = await pool.connect();
+
   try {
-    // Prevent duplicate reference submissions.
-    const duplicateRef = await pool.query(
+    await client.query("BEGIN");
+
+    // Lock by normalized reference + user id to avoid race-condition duplicates.
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+      `manual_qr_ref:${cleanedReference}`,
+    ]);
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+      `manual_qr_user:${req.userId}`,
+    ]);
+
+    const duplicateRef = await client.query(
       `SELECT id FROM transactions
        WHERE payment_method = 'manual_qr' AND payment_ref = $1
        LIMIT 1`,
@@ -197,6 +358,7 @@ router.post("/manual-qr/submit", auth, async (req: AuthRequest, res) => {
     );
 
     if (duplicateRef.rows.length > 0) {
+      await client.query("ROLLBACK");
       return res.status(409).json({
         error:
           "This payment reference is already submitted. Please verify the reference and try again.",
@@ -204,7 +366,7 @@ router.post("/manual-qr/submit", auth, async (req: AuthRequest, res) => {
     }
 
     // Allow one pending manual subscription request per user at a time.
-    const existingPending = await pool.query(
+    const existingPending = await client.query(
       `SELECT id FROM transactions
        WHERE user_id = $1
          AND type = 'subscription'
@@ -215,28 +377,31 @@ router.post("/manual-qr/submit", auth, async (req: AuthRequest, res) => {
     );
 
     if (existingPending.rows.length > 0) {
+      await client.query("ROLLBACK");
       return res.status(409).json({
         error:
           "You already have a pending QR payment request. Please wait for verification.",
       });
     }
 
-    const amount = getPlanAmount(billing);
+    const amount = getPlanAmount(parsedBilling);
     const metadata = {
-      billing,
+      billing: parsedBilling,
       payer_name: cleanedPayerName,
       note: cleanedNote,
       submitted_at: new Date().toISOString(),
       source: "manual_qr",
     };
 
-    const created = await pool.query(
+    const created = await client.query(
       `INSERT INTO transactions
         (user_id, type, amount, currency, status, payment_method, payment_ref, metadata)
        VALUES ($1, 'subscription', $2, 'NPR', 'pending', 'manual_qr', $3, $4::jsonb)
-       RETURNING id`,
+       RETURNING id, created_at`,
       [req.userId, amount, cleanedReference, JSON.stringify(metadata)]
     );
+
+    await client.query("COMMIT");
 
     return res.status(201).json({
       success: true,
@@ -245,10 +410,17 @@ router.post("/manual-qr/submit", auth, async (req: AuthRequest, res) => {
       amount,
       requires_admin_approval: true,
       access_activated: false,
+      submitted_at: created.rows[0].created_at,
       message:
         "Payment request submitted. Pro access will activate only after admin verification.",
     });
   } catch (err: any) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Ignore rollback failure and return original error.
+    }
+
     if (err.code === "42P01") {
       return res.status(503).json({
         error:
@@ -258,6 +430,8 @@ router.post("/manual-qr/submit", auth, async (req: AuthRequest, res) => {
 
     console.error("Manual QR submit error:", err);
     return res.status(500).json({ error: "Could not submit payment" });
+  } finally {
+    client.release();
   }
 });
 
@@ -266,15 +440,22 @@ router.post("/manual-qr/submit", auth, async (req: AuthRequest, res) => {
  * Returns eSewa payment form data
  */
 router.post("/esewa/initiate", auth, async (req: AuthRequest, res) => {
-  const { billing } = req.body; // 'monthly' or 'yearly'
+  if (!isEsewaConfigured()) {
+    return res.status(503).json({
+      error: "eSewa is not configured on the server.",
+    });
+  }
 
-  if (!billing || !["monthly", "yearly"].includes(billing)) {
+  const { billing } = req.body as { billing?: BillingCycle }; // 'monthly' or 'yearly'
+  const parsedBilling = parseBillingCycle(billing);
+
+  if (!parsedBilling) {
     return res.status(400).json({ error: "billing must be monthly or yearly" });
   }
 
-  const amount = getPlanAmount(billing as BillingCycle);
+  const amount = getPlanAmount(parsedBilling);
 
-  const transactionUuid = `SIA-${req.userId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const transactionUuid = `SIA-${req.userId}-${parsedBilling}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   const productCode = ESEWA_MERCHANT_CODE;
 
   // eSewa v2 signature: total_amount,transaction_uuid,product_code
@@ -286,7 +467,7 @@ router.post("/esewa/initiate", auth, async (req: AuthRequest, res) => {
 
   res.json({
     amount,
-    billing,
+    billing: parsedBilling,
     transactionUuid,
     productCode,
     signature,
@@ -303,10 +484,19 @@ router.post("/esewa/initiate", auth, async (req: AuthRequest, res) => {
  * POST /api/payments/esewa/verify
  * Called after eSewa redirects back with encoded data
  */
-router.post("/esewa/verify", auth, async (req: AuthRequest, res) => {
-  const { encodedData, billing } = req.body;
+router.post("/esewa/verify", async (req: express.Request, res) => {
+  if (!isEsewaConfigured()) {
+    return res.status(503).json({
+      error: "eSewa is not configured on the server.",
+    });
+  }
 
-  if (!encodedData) {
+  const { encodedData, billing } = req.body as {
+    encodedData?: string;
+    billing?: BillingCycle;
+  };
+
+  if (!encodedData || typeof encodedData !== "string") {
     return res.status(400).json({ error: "encodedData is required" });
   }
 
@@ -325,10 +515,27 @@ router.post("/esewa/verify", auth, async (req: AuthRequest, res) => {
       signature: esewaSignature,
     } = decoded;
 
+    if (
+      typeof transaction_uuid !== "string" ||
+      typeof total_amount !== "string" ||
+      typeof transaction_code !== "string" ||
+      typeof signed_field_names !== "string" ||
+      typeof esewaSignature !== "string"
+    ) {
+      return res.status(400).json({ error: "Invalid payment response payload" });
+    }
+
+    const parsedUuid = parseEsewaTransactionUuid(transaction_uuid);
+    if (!parsedUuid.userId) {
+      return res.status(400).json({ error: "Invalid transaction UUID" });
+    }
+
+    const fallbackBilling = parseBillingCycle(billing) || "monthly";
+    const resolvedBilling = parsedUuid.billing || fallbackBilling;
+    const targetUserId = parsedUuid.userId;
+
     // CRITICAL: Validate payment amount matches expected plan price
-    const expectedAmount = getPlanAmount(
-      (billing === "yearly" ? "yearly" : "monthly") as BillingCycle
-    );
+    const expectedAmount = getPlanAmount(resolvedBilling);
 
     if (parseFloat(total_amount) !== expectedAmount) {
       console.error(`Payment amount mismatch: expected ${expectedAmount}, got ${total_amount}`);
@@ -360,71 +567,128 @@ router.post("/esewa/verify", auth, async (req: AuthRequest, res) => {
     const verifyResponse = await fetch(
       `${ESEWA_VERIFY_URL}?product_code=${ESEWA_MERCHANT_CODE}&total_amount=${total_amount}&transaction_uuid=${transaction_uuid}`
     );
+
+    if (!verifyResponse.ok) {
+      return res.status(502).json({ error: "Payment verification provider unavailable" });
+    }
+
     const verifyData = await verifyResponse.json();
 
     if (verifyData.status !== "COMPLETE") {
       return res.status(400).json({ error: "Payment verification failed" });
     }
 
-    // CRITICAL: Prevent duplicate payment processing (replay attack)
-    const existingPayment = await pool.query(
-      `SELECT id FROM subscriptions WHERE payment_ref = $1`,
-      [transaction_code]
-    );
-
-    if (existingPayment.rows.length > 0) {
-      console.error(`Duplicate payment attempt with transaction_code: ${transaction_code}`);
-      return res.status(400).json({ error: "Payment already processed" });
+    if (
+      verifyData.transaction_uuid &&
+      verifyData.transaction_uuid !== transaction_uuid
+    ) {
+      return res.status(400).json({ error: "Verification mismatch" });
     }
 
-    // Calculate expiry
-    const now = new Date();
-    const expiresAt = new Date(now);
-    if (billing === "yearly") {
-      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-    } else {
-      expiresAt.setMonth(expiresAt.getMonth() + 1);
+    if (
+      verifyData.total_amount &&
+      parseFloat(String(verifyData.total_amount)) !== expectedAmount
+    ) {
+      return res.status(400).json({ error: "Verified amount mismatch" });
     }
 
-    // Save subscription
-    await pool.query(
-      `INSERT INTO subscriptions
-         (user_id, plan, billing, status, started_at, expires_at, payment_ref)
-       VALUES ($1, 'pro', $2, 'active', now(), $3, $4)
-       ON CONFLICT (user_id) DO UPDATE SET
-         plan = 'pro',
-         billing = $2,
-         status = 'active',
-         started_at = now(),
-         expires_at = $3,
-         payment_ref = $4`,
-      [req.userId, billing || "monthly", expiresAt, transaction_code]
-    );
+    const client = await pool.connect();
 
-    // Create transaction record for audit trail
-    await pool.query(
-      `INSERT INTO transactions
-         (user_id, type, amount, currency, status, payment_method, payment_ref, metadata)
-       VALUES ($1, 'subscription', $2, 'NPR', 'completed', 'esewa', $3, $4::jsonb)`,
-      [
-        req.userId,
-        total_amount,
-        transaction_code,
-        JSON.stringify({
-          billing: billing || "monthly",
-          esewa_transaction_code: transaction_code,
-          verified_at: new Date().toISOString(),
-          source: "esewa_payment",
-        }),
-      ]
-    );
+    try {
+      await client.query("BEGIN");
 
-    res.json({
-      success: true,
-      plan: "pro",
-      billing: billing || "monthly",
-      expires_at: expiresAt,
-    });
+      // Lock on transaction code + user to prevent replay race conditions.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+        `esewa_code:${transaction_code}`,
+      ]);
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+        `esewa_user:${targetUserId}`,
+      ]);
+
+      const existingPayment = await client.query(
+        `SELECT id FROM subscriptions WHERE payment_ref = $1 LIMIT 1`,
+        [transaction_code]
+      );
+
+      if (existingPayment.rows.length > 0) {
+        await client.query("ROLLBACK");
+        console.error(`Duplicate payment attempt with transaction_code: ${transaction_code}`);
+        return res.status(400).json({ error: "Payment already processed" });
+      }
+
+      const existingTransaction = await client.query(
+        `SELECT id FROM transactions
+         WHERE payment_method = 'esewa' AND payment_ref = $1
+         LIMIT 1`,
+        [transaction_code]
+      );
+
+      if (existingTransaction.rows.length > 0) {
+        await client.query("ROLLBACK");
+        console.error(
+          `Duplicate transaction record attempt with transaction_code: ${transaction_code}`
+        );
+        return res.status(400).json({ error: "Payment already processed" });
+      }
+
+      const currentSubscription = await client.query(
+        `SELECT expires_at FROM subscriptions WHERE user_id = $1`,
+        [targetUserId]
+      );
+
+      const currentExpiresAt = currentSubscription.rows[0]?.expires_at || null;
+      const expiresAt = calculateExpiryDate(resolvedBilling, currentExpiresAt);
+
+      await client.query(
+        `INSERT INTO subscriptions
+           (user_id, plan, billing, status, started_at, expires_at, payment_ref)
+         VALUES ($1, 'pro', $2, 'active', now(), $3, $4)
+         ON CONFLICT (user_id) DO UPDATE SET
+           plan = 'pro',
+           billing = $2,
+           status = 'active',
+           started_at = now(),
+           expires_at = $3,
+           payment_ref = $4`,
+        [targetUserId, resolvedBilling, expiresAt, transaction_code]
+      );
+
+      await client.query(
+        `INSERT INTO transactions
+           (user_id, type, amount, currency, status, payment_method, payment_ref, metadata)
+         VALUES ($1, 'subscription', $2, 'NPR', 'completed', 'esewa', $3, $4::jsonb)`,
+        [
+          targetUserId,
+          total_amount,
+          transaction_code,
+          JSON.stringify({
+            billing: resolvedBilling,
+            esewa_transaction_code: transaction_code,
+            esewa_transaction_uuid: transaction_uuid,
+            verified_at: new Date().toISOString(),
+            source: "esewa_payment",
+          }),
+        ]
+      );
+
+      await client.query("COMMIT");
+
+      return res.json({
+        success: true,
+        plan: "pro",
+        billing: resolvedBilling,
+        expires_at: expiresAt,
+      });
+    } catch (err) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        // Ignore rollback failure and return original error.
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (err) {
     console.error("eSewa verify error:", err);
     res.status(500).json({ error: "Verification failed" });

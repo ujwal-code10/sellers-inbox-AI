@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AdminLayout } from '../components/layout/AdminLayout';
 import { adminApi, AIUsageLog, PaginatedResponse } from '../services/adminApi';
+import { SectionHeader } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import '../styles/admin.css';
 
@@ -51,13 +52,20 @@ export function AIUsage() {
   return (
     <AdminLayout>
       <div className="admin-page-header">
-        <h1 className="admin-page-title">AI Usage</h1>
-        <p className="admin-page-subtitle">Monitor AI request logs and statistics</p>
+        <SectionHeader
+          title="AI Usage"
+          subtitle="Monitor AI request logs and statistics"
+          actions={(
+            <button type="button" className="admin-btn admin-btn-secondary admin-btn-sm" onClick={loadData}>
+              Refresh
+            </button>
+          )}
+        />
       </div>
 
       {/* Stats Cards */}
       {stats && (
-        <div className="admin-stats-grid" style={{ marginBottom: 24 }}>
+        <div className="admin-stats-grid admin-section">
           <div className="admin-stat-card">
             <div className="admin-stat-card-label">Today</div>
             <div className="admin-stat-card-value">{stats.today?.total_requests || 0}</div>
@@ -145,16 +153,14 @@ export function AIUsage() {
                       <td>
                         {log.user_name ? (
                           <div>
-                            <div style={{ fontWeight: 500 }}>{log.user_name}</div>
-                            <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)' }}>
-                              {log.user_email}
-                            </div>
+                            <div className="admin-user-name">{log.user_name}</div>
+                            <div className="admin-user-email">{log.user_email}</div>
                           </div>
                         ) : (
-                          <span style={{ color: 'var(--admin-color-text-muted)' }}>User #{log.user_id}</span>
+                          <span className="admin-muted">User #{log.user_id}</span>
                         )}
                       </td>
-                      <td style={{ textTransform: 'capitalize' }}>{log.request_type.replace('_', ' ')}</td>
+                      <td className="admin-capitalize">{log.request_type.replace('_', ' ')}</td>
                       <td>
                         <span className={`admin-badge ${log.status === 'success' ? 'admin-badge-success' : 'admin-badge-error'}`}>
                           {log.status}
@@ -163,7 +169,7 @@ export function AIUsage() {
                       <td>{log.latency_ms ? `${log.latency_ms}ms` : 'N/A'}</td>
                       <td>
                         {log.input_tokens || log.output_tokens ? (
-                          <span style={{ fontSize: 12 }}>
+                          <span className="admin-text-xs">
                             {log.input_tokens || 0} / {log.output_tokens || 0}
                           </span>
                         ) : 'N/A'}

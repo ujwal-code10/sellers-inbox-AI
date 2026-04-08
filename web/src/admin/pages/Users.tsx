@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AdminLayout } from '../components/layout/AdminLayout';
 import { adminApi, User, PaginatedResponse } from '../services/adminApi';
+import { SectionHeader } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import '../styles/admin.css';
 
@@ -54,8 +55,15 @@ export function Users() {
   return (
     <AdminLayout>
       <div className="admin-page-header">
-        <h1 className="admin-page-title">Users</h1>
-        <p className="admin-page-subtitle">Manage your platform users</p>
+        <SectionHeader
+          title="Users"
+          subtitle="Manage your platform users"
+          actions={(
+            <button type="button" className="admin-btn admin-btn-secondary admin-btn-sm" onClick={() => loadUsers()}>
+              Refresh
+            </button>
+          )}
+        />
       </div>
 
       <div className="admin-card">
@@ -127,15 +135,13 @@ export function Users() {
                   {data.data.map((user) => (
                     <tr key={user.id} onClick={() => navigate(`/admin/users/${user.id}`)}>
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div className="admin-user-cell">
                           <div className="admin-avatar">
                             {user.name.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <div style={{ fontWeight: 500 }}>{user.name}</div>
-                            <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)' }}>
-                              {user.email}
-                            </div>
+                            <div className="admin-user-name">{user.name}</div>
+                            <div className="admin-user-email">{user.email}</div>
                           </div>
                         </div>
                       </td>

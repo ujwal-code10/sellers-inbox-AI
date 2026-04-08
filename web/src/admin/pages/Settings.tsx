@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AdminLayout } from '../components/layout/AdminLayout';
 import { adminApi, SystemSetting } from '../services/adminApi';
+import { SectionHeader } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import '../styles/admin.css';
@@ -75,13 +76,13 @@ export function Settings() {
     return (
       <AdminLayout>
         <div className="admin-page-header">
-          <h1 className="admin-page-title">Settings</h1>
+          <SectionHeader title="Settings" subtitle="System configuration" />
         </div>
         <div className="admin-card">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} style={{ marginBottom: 24 }}>
-              <div className="admin-skeleton" style={{ height: 20, width: 150, marginBottom: 8 }} />
-              <div className="admin-skeleton" style={{ height: 80 }} />
+            <div key={i} className="admin-settings-item">
+              <div className="admin-skeleton admin-skeleton-block-sm" />
+              <div className="admin-skeleton admin-skeleton-block-md" />
             </div>
           ))}
         </div>
@@ -92,43 +93,47 @@ export function Settings() {
   return (
     <AdminLayout>
       <div className="admin-page-header">
-        <h1 className="admin-page-title">Settings</h1>
-        <p className="admin-page-subtitle">
-          System configuration {!isSuperAdmin && '(read-only for admins)'}
-        </p>
+        <SectionHeader
+          title="Settings"
+          subtitle={`System configuration ${!isSuperAdmin ? '(read-only for admins)' : ''}`}
+          actions={(
+            <button type="button" className="admin-btn admin-btn-secondary admin-btn-sm" onClick={loadSettings}>
+              Refresh
+            </button>
+          )}
+        />
       </div>
 
       <div className="admin-card">
         {settings.length > 0 ? (
           <div>
             {settings.map((setting) => (
-              <div key={setting.key} style={{ marginBottom: 32, paddingBottom: 32, borderBottom: '1px solid var(--admin-color-border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+              <div key={setting.key} className="admin-settings-item">
+                <div className="admin-settings-head">
                   <div>
-                    <h3 style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>
+                    <h3 className="admin-settings-key">
                       {setting.key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
                     </h3>
                     {setting.description && (
-                      <p style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)', margin: '4px 0 0' }}>
+                      <p className="admin-settings-description">
                         {setting.description}
                       </p>
                     )}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--admin-color-text-muted)' }}>
+                  <div className="admin-settings-updated">
                     Updated: {formatDate(setting.updated_at)}
                   </div>
                 </div>
 
                 <textarea
-                  className="admin-input"
-                  style={{ fontFamily: 'var(--admin-font-mono)', minHeight: 100, resize: 'vertical' }}
+                  className="admin-input admin-settings-textarea"
                   value={editValues[setting.key] || ''}
                   onChange={(e) => setEditValues({ ...editValues, [setting.key]: e.target.value })}
                   disabled={!isSuperAdmin}
                 />
 
                 {isSuperAdmin && (
-                  <div style={{ marginTop: 8 }}>
+                  <div className="admin-section-actions admin-mt-2">
                     <button
                       className="admin-btn admin-btn-primary admin-btn-sm"
                       onClick={() => handleSave(setting.key)}

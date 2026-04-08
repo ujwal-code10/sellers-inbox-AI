@@ -1,10 +1,7 @@
 import { Response, NextFunction } from "express";
 import { AuthRequest } from "./auth.js";
 import pool from "../utils/db.js";
-
-// Temporary: generous limits during beta testing
-export const FREE_REPLY_LIMIT = 99; //was 20
-export const FREE_PRODUCT_LIMIT = 99;// was 5
+import { getEffectiveFreeTierLimits } from "../utils/freeTierLimits.js";
 
 // Check daily reply limit for free users
 export async function checkReplyLimit(
@@ -32,6 +29,8 @@ export async function checkReplyLimit(
     // Pro users have no limit
     if (isPro) return next();
 
+    const limits = await getEffectiveFreeTierLimits();
+
     // Free users — check daily count
     const today = new Date().toISOString().split("T")[0];
     const usageRes = await pool.query(
@@ -42,11 +41,12 @@ export async function checkReplyLimit(
 
     const count = usageRes.rows[0]?.reply_count || 0;
 
-    if (count >= FREE_REPLY_LIMIT) {
+    if (count >= limits.dailyReplies) {
       return res.status(429).json({
         error: "Daily limit reached",
-        limit: FREE_REPLY_LIMIT,
+        limit: limits.dailyReplies,
         used: count,
+        mode: limits.enforced ? "enforced" : "trust",
         upgrade: true,
       });
     }
@@ -97,6 +97,8 @@ export async function checkProductLimit(
 
     if (isPro) return next();
 
+    const limits = await getEffectiveFreeTierLimits();
+
     const countRes = await pool.query(
       `SELECT COUNT(*) as count FROM products WHERE user_id = $1`,
       [userId]
@@ -104,11 +106,12 @@ export async function checkProductLimit(
 
     const count = parseInt(countRes.rows[0].count);
 
-    if (count >= FREE_PRODUCT_LIMIT) {
+    if (count >= limits.maxProducts) {
       return res.status(403).json({
         error: "Product limit reached",
-        limit: FREE_PRODUCT_LIMIT,
+        limit: limits.maxProducts,
         used: count,
+        mode: limits.enforced ? "enforced" : "trust",
         upgrade: true,
       });
     }

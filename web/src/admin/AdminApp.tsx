@@ -16,13 +16,8 @@ function AdminProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="admin-root" style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh'
-      }}>
-        <div className="admin-skeleton" style={{ width: 40, height: 40, borderRadius: '50%' }} />
+      <div className="admin-root admin-route-loading">
+        <div className="admin-skeleton admin-route-loading-indicator" />
       </div>
     );
   }
@@ -39,13 +34,8 @@ function AdminPublicRoute({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="admin-root" style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh'
-      }}>
-        <div className="admin-skeleton" style={{ width: 40, height: 40, borderRadius: '50%' }} />
+      <div className="admin-root admin-route-loading">
+        <div className="admin-skeleton admin-route-loading-indicator" />
       </div>
     );
   }

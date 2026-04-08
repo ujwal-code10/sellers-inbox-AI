@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { AdminLayout } from '../components/layout/AdminLayout';
 import { adminApi, Subscription, PaginatedResponse } from '../services/adminApi';
+import { SectionHeader } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import '../styles/admin.css';
 
@@ -117,11 +118,18 @@ export function Subscriptions() {
   return (
     <AdminLayout>
       <div className="admin-page-header">
-        <h1 className="admin-page-title">Subscriptions</h1>
-        <p className="admin-page-subtitle">Manage user subscriptions</p>
+        <SectionHeader
+          title="Subscriptions"
+          subtitle="Manage user subscriptions"
+          actions={(
+            <button type="button" className="admin-btn admin-btn-secondary admin-btn-sm" onClick={loadSubscriptions}>
+              Refresh
+            </button>
+          )}
+        />
       </div>
 
-      <div className="admin-stats-grid" style={{ marginBottom: 24 }}>
+      <div className="admin-stats-grid admin-section">
         <div className="admin-stat-card admin-stat-card-interactive">
           <div className="admin-stat-card-label">Visible in page</div>
           <div className="admin-stat-card-value">{stats.total}</div>
@@ -284,13 +292,11 @@ export function Subscriptions() {
                           <td>
                             {sub.user_name ? (
                               <div>
-                                <div style={{ fontWeight: 500 }}>{sub.user_name}</div>
-                                <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)' }}>
-                                  {sub.user_email}
-                                </div>
+                                <div className="admin-user-name">{sub.user_name}</div>
+                                <div className="admin-user-email">{sub.user_email}</div>
                               </div>
                             ) : (
-                              <span style={{ color: 'var(--admin-color-text-muted)' }}>User #{sub.user_id}</span>
+                              <span className="admin-muted">User #{sub.user_id}</span>
                             )}
                           </td>
                           <td>
@@ -298,7 +304,7 @@ export function Subscriptions() {
                               {sub.plan === 'pro' ? 'Pro' : 'Free'}
                             </span>
                           </td>
-                          <td style={{ textTransform: 'capitalize' }}>{sub.billing || 'N/A'}</td>
+                          <td className="admin-capitalize">{sub.billing || 'N/A'}</td>
                           <td>
                             <span className={`admin-badge ${getStatusBadgeClass(sub.status)}`}>
                               {sub.status}
@@ -308,7 +314,7 @@ export function Subscriptions() {
                           <td>
                             <div>{formatDate(sub.expires_at)}</div>
                             {expiryLabel && (
-                              <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)' }}>
+                              <div className="admin-user-email">
                                 {expiryLabel}
                               </div>
                             )}
@@ -346,7 +352,7 @@ export function Subscriptions() {
                         </div>
                         <div>
                           <span>Billing</span>
-                          <strong style={{ textTransform: 'capitalize' }}>{sub.billing || 'N/A'}</strong>
+                          <strong className="admin-capitalize">{sub.billing || 'N/A'}</strong>
                         </div>
                         <div>
                           <span>Started</span>

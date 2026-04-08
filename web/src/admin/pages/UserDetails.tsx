@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AdminLayout } from '../components/layout/AdminLayout';
 import { adminApi, UserDetails as UserDetailsType } from '../services/adminApi';
+import { SectionHeader } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import '../styles/admin.css';
 
@@ -110,9 +111,9 @@ export function UserDetails() {
   if (loading) {
     return (
       <AdminLayout>
-        <div className="admin-skeleton admin-skeleton-title" style={{ marginBottom: 24 }} />
+        <div className="admin-skeleton admin-skeleton-title admin-mb-6" />
         <div className="admin-card">
-          <div className="admin-skeleton" style={{ height: 200 }} />
+          <div className="admin-skeleton admin-skeleton-card-lg" />
         </div>
       </AdminLayout>
     );
@@ -124,12 +125,14 @@ export function UserDetails() {
 
   return (
     <AdminLayout>
-      <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="admin-page-header admin-user-details-header">
         <div>
-          <h1 className="admin-page-title">{user.name}</h1>
-          <p className="admin-page-subtitle">{user.email}</p>
+          <SectionHeader
+            title={user.name}
+            subtitle={user.email}
+          />
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="admin-user-details-actions">
           {user.plan !== 'pro' && (
             <button
               className="admin-btn admin-btn-primary"
@@ -169,7 +172,7 @@ export function UserDetails() {
       </div>
 
       {/* Status Badges */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+      <div className="admin-user-details-badges">
         <span className={`admin-badge ${user.plan === 'pro' ? 'admin-badge-info' : 'admin-badge-neutral'}`}>
           {user.plan === 'pro' ? 'Pro' : 'Free'}
         </span>
@@ -196,38 +199,38 @@ export function UserDetails() {
 
       {/* Tab Content */}
       {activeTab === 'overview' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        <div className="admin-overview-grid">
           {/* User Info */}
           <div className="admin-card">
-            <h3 className="admin-card-title" style={{ marginBottom: 16 }}>User Information</h3>
-            <div style={{ display: 'grid', gap: 12 }}>
+            <h3 className="admin-card-title admin-card-title-spaced">User Information</h3>
+            <div className="admin-info-list">
               <div>
-                <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)', marginBottom: 4 }}>Email</div>
+                <div className="admin-info-label">Email</div>
                 <div>{user.email}</div>
               </div>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)', marginBottom: 4 }}>Joined</div>
+                <div className="admin-info-label">Joined</div>
                 <div>{formatDate(user.created_at)}</div>
               </div>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)', marginBottom: 4 }}>Subscription</div>
+                <div className="admin-info-label">Subscription</div>
                 <div>{user.plan || 'Free'} ({user.billing || 'N/A'})</div>
               </div>
               {user.expires_at && (
                 <div>
-                  <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)', marginBottom: 4 }}>Expires</div>
+                  <div className="admin-info-label">Expires</div>
                   <div>{formatDate(user.expires_at)}</div>
                 </div>
               )}
               {user.banned_at && (
                 <>
                   <div>
-                    <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)', marginBottom: 4 }}>Banned At</div>
+                    <div className="admin-info-label">Banned At</div>
                     <div>{formatDate(user.banned_at)}</div>
                   </div>
                   {user.ban_reason && (
                     <div>
-                      <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)', marginBottom: 4 }}>Ban Reason</div>
+                      <div className="admin-info-label">Ban Reason</div>
                       <div>{user.ban_reason}</div>
                     </div>
                   )}
@@ -238,23 +241,23 @@ export function UserDetails() {
 
           {/* Usage Stats */}
           <div className="admin-card">
-            <h3 className="admin-card-title" style={{ marginBottom: 16 }}>Usage Statistics</h3>
+            <h3 className="admin-card-title admin-card-title-spaced">Usage Statistics</h3>
             <div className="admin-stats-grid">
               <div>
-                <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)', marginBottom: 4 }}>Products</div>
-                <div style={{ fontSize: 24, fontWeight: 600 }}>{stats.product_count}</div>
+                <div className="admin-info-label">Products</div>
+                <div className="admin-stat-number">{stats.product_count}</div>
               </div>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)', marginBottom: 4 }}>Total Replies</div>
-                <div style={{ fontSize: 24, fontWeight: 600 }}>{stats.total_replies}</div>
+                <div className="admin-info-label">Total Replies</div>
+                <div className="admin-stat-number">{stats.total_replies}</div>
               </div>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)', marginBottom: 4 }}>Today</div>
-                <div style={{ fontSize: 24, fontWeight: 600 }}>{stats.replies_today}</div>
+                <div className="admin-info-label">Today</div>
+                <div className="admin-stat-number">{stats.replies_today}</div>
               </div>
               <div>
-                <div style={{ fontSize: 12, color: 'var(--admin-color-text-secondary)', marginBottom: 4 }}>This Week</div>
-                <div style={{ fontSize: 24, fontWeight: 600 }}>{stats.replies_this_week}</div>
+                <div className="admin-info-label">This Week</div>
+                <div className="admin-stat-number">{stats.replies_this_week}</div>
               </div>
             </div>
           </div>
