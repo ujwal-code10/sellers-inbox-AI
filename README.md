@@ -31,28 +31,31 @@ Manual replies are slow and inconsistent. Generic AI can hallucinate stock or pr
 4. Seller taps Generate.
 5. Backend resolves product context and confidence.
 6. System decides:
-   - REPLY: generate AI suggestion
-   - ASK: return clarification question
-7. Seller copies the result and sends manually.
+  - REPLY: generate AI suggestion
+  - ASK: return clarification + one-tap quick product picks
+7. If needed, seller taps a suggested product and regenerates instantly.
+8. Seller copies the result and sends manually.
 
 Important:
 
-- No product selector in AI flow.
-- AI auto-matches product using name and keywords.
-- If unclear, system asks clarification instead of guessing.
+- AI auto-matches product when context is clear.
+- If unclear, system asks clarification and provides quick product picks before search.
+- Search is fallback for edge cases, not the first step.
 - No auto-send in MVP.
 
 ## Key Features (Implemented)
 
-- Authentication: signup, login, JWT, protected routes
+- Authentication: signup/login with HttpOnly access+refresh cookies, CSRF protection, protected routes
 - Products: name, price, keywords, notes
 - Variants: color-size rows, availability toggles, bulk actions
 - Delivery zones: per-zone charge and COD settings
 - AI reply generation with tone selector
-- Product resolver + confidence scoring + decision engine
-- eSewa payment (initiate + verify)
+- Product resolver + confidence scoring + decision engine + quick-pick recovery for vague messages
+- Manual QR payment submission (reference + payer) with admin verification
+- eSewa initiate/verify endpoints (when configured)
 - Free/Pro limits and plan enforcement middleware
 - Upgrade flow and paywall handling in web app
+- Admin panel with role-based access, transaction approval/rejection, settings, and admin account management
 
 ## Plan and Pricing
 
@@ -140,6 +143,8 @@ Auth:
 
 - POST /api/auth/signup
 - POST /api/auth/login
+- POST /api/auth/refresh
+- POST /api/auth/logout
 - GET /api/auth/me
 
 Products:
@@ -169,8 +174,21 @@ AI:
 Payments:
 
 - GET /api/payments/plans
+- GET /api/payments/manual-qr/config
+- GET /api/payments/manual-qr/status
+- POST /api/payments/manual-qr/submit
 - POST /api/payments/esewa/initiate
 - POST /api/payments/esewa/verify
+
+Admin:
+
+- POST /api/admin/auth/login
+- POST /api/admin/auth/refresh
+- POST /api/admin/auth/logout
+- GET /api/admin/auth/me
+- POST /api/admin/auth/change-password
+- POST /api/admin/auth/change-email
+- POST /api/admin/auth/create-admin (super_admin)
 
 Response conventions:
 
@@ -183,12 +201,14 @@ Backend uses:
 
 - DATABASE_URL
 - JWT_SECRET
+- ADMIN_JWT_SECRET
 - GROQ_API_KEY
 - MANUAL_QR_IMAGE_URL
 - MANUAL_QR_RECEIVER_NAME
 - MANUAL_QR_RECEIVER_ID
 - MANUAL_QR_SUPPORT_TEXT
 - FRONTEND_URL
+- CORS_ORIGINS
 - NODE_ENV
 
 ## Local Development Setup
@@ -288,19 +308,14 @@ MASTER_SPEC.md
 Already implemented:
 
 - bcrypt password hashing
-- JWT auth (7-day tokens)
-- Route ownership checks
-- eSewa signature verification
+- Cookie-based auth sessions with rotating refresh tokens
+- CSRF validation for cookie-authenticated unsafe methods
+- Role-based admin auth (admin/super_admin)
+- Login and payment submission rate limiting
+- Restricted CORS + helmet + cookie parser hardening
+- customerMessage length guard
+- Duplicate manual QR reference prevention
 - Server-side Free/Pro enforcement
-
-Planned hardening:
-
-- Rate limiting on login
-- Zod input validation
-- Restricted CORS
-- Helmet
-- customerMessage length cap
-- Duplicate payment prevention
 
 ## Known Issues
 
@@ -330,6 +345,7 @@ Phase 5: Deeper integrations and automation safeguards
 - docs/ai-rules.md
 - docs/API_contract.md
 - docs/MVP_DECISION_RULES.md
+- docs/SHIP_TESTING_GUIDE.md
 - docs/product_context.md
 
 When documentation conflicts, MASTER_SPEC.md wins.

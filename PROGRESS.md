@@ -1,21 +1,25 @@
 # Seller Inbox AI — Progress Tracker
 
 ## ✅ Done
-- [x] Auth (signup, login, JWT)
+- [x] Auth (signup, login, refresh, logout) with HttpOnly cookie sessions + CSRF
 - [x] Products + keywords + notes
 - [x] Variant grid generator
 - [x] Instant stock toggle
 - [x] Delivery zones
 - [x] AI reply generation (14 rules, Romanized Nepali)
 - [x] Smart clarification for ambiguous messages
-- [x] Decision engine
-- [x] eSewa payment (sandbox)
+- [x] Decision engine + one-tap product quick picks for vague messages
+- [x] Manual QR payment submission + admin approval/rejection workflow
+- [x] eSewa initiate/verify endpoints (config dependent)
 - [x] Subscriptions + usage_daily tables
 - [x] Free/Pro enforcement (checkPlan middleware)
 - [x] Upgrade page (monthly/yearly)
 - [x] Paywall modal
 - [x] Upgrade button in Dashboard
 - [x] Landing page (premium dark design)
+- [x] Admin panel (dashboard, users, subscriptions, settings, AI usage, transactions)
+- [x] Admin account security (change password + change email)
+- [x] Super admin create-admin flow
 - [x] Frontend deployed on Vercel
 - [x] Backend deployed on Vercel serverless
 - [x] Database on Neon PostgreSQL
@@ -23,9 +27,10 @@
 - [x] Neon migrations run (keywords, notes, subscriptions, usage_daily)
 
 ## 🔄 This Week (In Order)
-- [*] Security audit (use prompt in PROMPT.md)
-- [*] Fix any HIGH severity issues from audit
-- [*] Connect landing page with real Vercel URLs
+- [*] Security hardening + dependency cleanup
+- [*] Admin auth/account improvements
+- [*] AI low-friction reply flow improvements
+- [ ] End-to-end ship checklist run
 - [ ] Message 20 Instagram sellers
 - [ ] Get 5 sellers to try the app
 

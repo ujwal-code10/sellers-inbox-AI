@@ -328,6 +328,10 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
         </AppAlert>
       ) : null}
 
+      <AppAlert type="info" title="Setup Tip">
+        You do not need to add your full catalog. Start with your top 20 fast-selling items and add more later.
+      </AppAlert>
+
       {/* ── Add Product Modal ── */}
       {showAddProduct && (
         <div className="modal-overlay" onClick={() => setShowAddProduct(false)}>

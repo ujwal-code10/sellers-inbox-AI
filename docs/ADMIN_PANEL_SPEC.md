@@ -1,7 +1,7 @@
 # Admin Panel System Specification
 
 > Version: 1.0
-> Status: Architecture Design
+> Status: Implemented baseline + ongoing polish
 > Last Updated: April 2026
 
 ---
@@ -174,7 +174,7 @@ backend/src/
 | File | Responsibility |
 |------|----------------|
 | `adminAuth.ts` (middleware) | Verify admin JWT, attach adminId and role to request |
-| `adminAuth.ts` (routes) | Admin login, token refresh, password change |
+| `adminAuth.ts` (routes) | Admin login/refresh/logout, me, password+email change, create-admin (super_admin) |
 | `adminUsers.ts` | List users, view user details, ban/unban users |
 | `adminTransactions.ts` | List transactions, filter by status/date/user |
 | `adminSubscriptions.ts` | View/modify user subscriptions, grant Pro access |
@@ -266,10 +266,10 @@ export function requireSuperAdmin(
 1. Admin submits email + password to POST /api/admin/auth/login
 2. Server validates credentials against admin_users table
 3. Server checks is_active = true
-4. Server generates JWT with { id, role, type: "admin" }
-5. Server updates last_login_at
-6. Server returns { token, admin: { id, email, name, role } }
-7. Frontend stores token in localStorage (key: admin_token)
+4. Server generates admin access token + refresh session
+5. Server sets HttpOnly auth cookies + CSRF cookie
+6. Server updates last_login_at and writes audit log
+7. Frontend uses credentials: include and automatic refresh flow
 ```
 
 ### 3.3 JWT Strategy
@@ -278,7 +278,8 @@ export function requireSuperAdmin(
 |----------|-------|
 | Secret | `ADMIN_JWT_SECRET` (separate from seller JWT_SECRET) |
 | Algorithm | HS256 |
-| Expiry | 8 hours (shorter than seller tokens) |
+| Access token | Short-lived JWT in HttpOnly cookie |
+| Refresh token | Rotating server-side session token in HttpOnly cookie |
 | Payload | `{ id, role, type: "admin", iat, exp }` |
 
 ### 3.4 Environment Variables (New)
@@ -297,7 +298,10 @@ ADMIN_JWT_SECRET=<min 32 chars, different from JWT_SECRET>
 |--------|----------|-------------|
 | POST | `/admin/auth/login` | Admin login |
 | POST | `/admin/auth/refresh` | Refresh token |
+| POST | `/admin/auth/logout` | Logout and clear cookies |
 | POST | `/admin/auth/change-password` | Change admin password |
+| POST | `/admin/auth/change-email` | Change admin email (re-login required) |
+| POST | `/admin/auth/create-admin` | Create new admin (super_admin only) |
 | GET | `/admin/auth/me` | Get current admin info |
 
 ### 4.2 Users Management

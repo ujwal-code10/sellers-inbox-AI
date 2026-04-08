@@ -1,6 +1,6 @@
 # Smart Reply Assistant — Master Project Specification
 > **Version:** 3.1 — Live codebase blueprint  
-> **Last Updated:** March 2026  
+> **Last Updated:** April 2026  
 > **Status:** Web MVP built. Backend deployment in progress. Flutter paused.  
 > **Rule:** Every technical decision must reference this document. Update when anything changes.
 
@@ -29,7 +29,7 @@
 | **Backend** | Node.js 20 + Express 4 + TypeScript | ESM modules |
 | **Database** | PostgreSQL 15 | Docker locally, Neon PostgreSQL in production |
 | **ORM** | Raw SQL via `pg` (node-postgres) | No Prisma. Pool in `src/utils/db.ts` |
-| **Auth** | Custom JWT — `jsonwebtoken` + `bcryptjs` | 7-day tokens |
+| **Auth** | Cookie sessions + JWT signing + `bcryptjs` | HttpOnly access/refresh cookies + CSRF |
 | **AI** | Groq SDK — `groq-sdk` package | Model: `llama-3.3-70b-versatile` |
 | **Frontend Hosting** | Vercel | Auto-deploy from GitHub |
 | **Backend Hosting** | Vercel serverless | Included in free tier |
@@ -41,10 +41,16 @@
 |---|---|---|
 | `DATABASE_URL` | Backend (Vercel serverless) | Neon PostgreSQL connection string |
 | `JWT_SECRET` | Backend (Vercel serverless) | Token signing secret |
+| `ADMIN_JWT_SECRET` | Backend (Vercel serverless) | Admin token signing secret |
 | `GROQ_API_KEY` | Backend (Vercel serverless) | Groq AI API key |
 | `ESEWA_MERCHANT_CODE` | Backend (Vercel serverless) | `EPAYTEST` sandbox / real code production |
 | `ESEWA_SECRET_KEY` | Backend (Vercel serverless) | eSewa HMAC signing secret |
+| `MANUAL_QR_IMAGE_URL` | Backend (Vercel serverless) | Manual QR image path/url |
+| `MANUAL_QR_RECEIVER_NAME` | Backend (Vercel serverless) | Receiver display name |
+| `MANUAL_QR_RECEIVER_ID` | Backend (Vercel serverless) | Receiver wallet/account id |
+| `MANUAL_QR_SUPPORT_TEXT` | Backend (Vercel serverless) | Payment help text in app |
 | `FRONTEND_URL` | Backend (Vercel serverless) | Vercel frontend URL for eSewa redirect |
+| `CORS_ORIGINS` | Backend (Vercel serverless) | Comma-separated allowed origins |
 | `NODE_ENV` | Backend (Vercel serverless) | `production` |
 
 ### Environment Strategy
@@ -79,11 +85,12 @@ Smart Reply Assistant helps small Nepali Instagram and WhatsApp sellers generate
 4. Seller pastes message into one text field
 5. Seller selects tone (Friendly / Professional / Persuasive)
 6. Seller taps Generate
-7. AI matches product, generates reply
-8. Seller copies reply → pastes back into WhatsApp/Instagram
+7. AI matches product and generates reply when confidence is usable
+8. If message is vague, app shows quick product picks for one-tap recovery
+9. Seller copies reply → pastes back into WhatsApp/Instagram
 ```
 
-**NO product selector.** AI auto-matches. If unclear → asks for clarification, never guesses.
+**No forced pre-selection.** AI auto-matches first. If unclear, seller gets quick picks before manual search.
 
 **NOT for every message.** Best for first customer inquiries. Follow-up messages are faster to type manually.
 
@@ -125,7 +132,7 @@ Smart Reply Assistant helps small Nepali Instagram and WhatsApp sellers generate
 ## 2. Product Scope
 
 ### 2.1 Currently Built (Working)
-- [x] Auth (signup, login, JWT)
+- [x] Auth (signup/login/refresh/logout) with cookie sessions + CSRF
 - [x] Products (name, price, keywords, notes)
 - [x] Variant grid generator (colors × sizes → individual rows)
 - [x] Instant variant stock toggle (optimistic update)
@@ -135,9 +142,10 @@ Smart Reply Assistant helps small Nepali Instagram and WhatsApp sellers generate
 - [x] Tone selector (Friendly, Professional, Persuasive)
 - [x] Auto product matching (name + keywords)
 - [x] Smart clarification for ambiguous messages
-- [x] Decision engine (productResolver + confidence + decisionEngine)
+- [x] Decision engine (productResolver + confidence + decisionEngine + quick product picks)
 - [x] Stock status badge
-- [x] eSewa payment (initiate + verify)
+- [x] Manual QR payment submit + admin verification
+- [x] eSewa payment endpoints (config dependent)
 - [x] subscriptions + usage_daily tables
 - [x] Free/Pro enforcement (checkPlan middleware)
 - [x] Upgrade page (monthly/yearly toggle)
@@ -145,11 +153,12 @@ Smart Reply Assistant helps small Nepali Instagram and WhatsApp sellers generate
 - [x] Upgrade button in Dashboard nav
 - [x] Payment success/failure pages
 - [x] Landing page (premium dark HTML)
+- [x] Admin panel (users, transactions, subscriptions, AI usage, settings)
 
 ### 2.2 Not Built Yet
-- [*] vercel backend deployed
+- [x] Vercel backend deployed
 - [*] Khalti payment
-- [*] Landing page live with real URLs
+- [x] Landing page live with real URLs
 - [ ] Real seller testing
 
 ### 2.3 Future (After Monetization)
@@ -189,7 +198,8 @@ Smart Reply Assistant helps small Nepali Instagram and WhatsApp sellers generate
 
 | Provider | Status | Notes |
 |---|---|---|
-| eSewa | ✅ Built (sandbox) | Most used wallet in Nepal |
+| Manual QR | ✅ Built | Seller submits payment reference, admin verifies |
+| eSewa API | ✅ Built (config dependent) | Initiate + verify endpoints available |
 | Khalti | ⏳ Pending | Second most used |
 | Stripe | ❌ Skip | No international cards in target market |
 

@@ -47,6 +47,28 @@ async function logAIUsage(params: {
 
 function detectIntent(message: string): "PRICE" | "AVAILABILITY" | "DELIVERY" | "DELIVERY_CONFIRM" | "COD" | "DETAILS" | "GENERAL" | "UNKNOWN" {
   const lowerMsg = message.toLowerCase();
+  const compact = lowerMsg.replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+
+  const priceSignals = [
+    "price",
+    "price please",
+    "price pls",
+    "rate",
+    "last price",
+    "best price",
+    "cost",
+    "kati",
+    "dam",
+    "bhau",
+  ];
+
+  if (priceSignals.some((signal) => compact.includes(signal))) {
+    return "PRICE";
+  }
+
+  if (/\bpp\b/.test(compact) || /\bp\.?p\.?\b/.test(compact)) {
+    return "PRICE";
+  }
 
   if (lowerMsg.includes("cod") || lowerMsg.includes("cash on delivery")) {
     return "COD";
@@ -59,10 +81,6 @@ function detectIntent(message: string): "PRICE" | "AVAILABILITY" | "DELIVERY" | 
 
   if (lowerMsg.includes("delivery") || lowerMsg.includes("shipping") || lowerMsg.includes("pathau") || lowerMsg.includes("deliver")) {
     return "DELIVERY";
-  }
-
-  if (lowerMsg.includes("price") || lowerMsg.includes("kati") || lowerMsg.includes("cost")) {
-    return "PRICE";
   }
 
   if (lowerMsg.includes("details") || lowerMsg.includes("detail") || lowerMsg.includes("info") || lowerMsg.includes("information") || lowerMsg.includes("barema") || lowerMsg.includes("bare")) {
@@ -83,7 +101,9 @@ function detectIntent(message: string): "PRICE" | "AVAILABILITY" | "DELIVERY" | 
 }
 
 router.post("/ai/suggest-reply", auth, checkReplyLimit, async (req: AuthRequest, res) => {
-  const { customerMessage, tone, forcedProduct } = req.body;
+  const { customerMessage, tone, forcedProduct, source, hasMedia, recentProducts } = req.body;
+  const normalizedForcedProduct =
+    typeof forcedProduct === "string" ? forcedProduct.trim() : "";
 
   if (!customerMessage) {
     return res.status(400).json({ error: "customerMessage required" });
@@ -104,9 +124,40 @@ router.post("/ai/suggest-reply", auth, checkReplyLimit, async (req: AuthRequest,
     return res.status(400).json({ error: "forcedProduct must be a valid product name" });
   }
 
+  if (recentProducts && !Array.isArray(recentProducts)) {
+    return res.status(400).json({ error: "recentProducts must be an array of product names" });
+  }
+
+  const safeRecentProducts = Array.isArray(recentProducts)
+    ? recentProducts
+      .filter((item: unknown): item is string => typeof item === "string")
+      .map((item: string) => item.trim())
+      .filter((item: string) => item.length > 0)
+      .slice(0, 10)
+    : [];
+
+  const normalizedSource: "STORY_REPLY" | "REEL_FORWARD" | "DM" =
+    source === "STORY_REPLY" || source === "REEL_FORWARD" || source === "DM"
+      ? source
+      : "DM";
+
+  const normalizedHasMedia = Boolean(hasMedia);
+
   try {
     const productsRes = await pool.query(
-      `SELECT id, name, price::double precision AS price, keywords, notes FROM products WHERE user_id = $1`,
+      `SELECT
+         p.id,
+         p.name,
+         p.price::double precision AS price,
+         p.keywords,
+         p.notes,
+         COALESCE(COUNT(v.id), 0)::int AS variant_count,
+         COALESCE(COUNT(*) FILTER (WHERE v.available = true), 0)::int AS available_variant_count
+       FROM products p
+       LEFT JOIN variants v ON v.product_id = p.id
+       WHERE p.user_id = $1
+       GROUP BY p.id
+       ORDER BY available_variant_count DESC, variant_count DESC, p.id DESC`,
       [req.userId]
     );
 
@@ -120,25 +171,36 @@ router.post("/ai/suggest-reply", auth, checkReplyLimit, async (req: AuthRequest,
 
     const products = productsRes.rows;
     const variants = variantsRes.rows;
+    const selectedProduct = normalizedForcedProduct
+      ? products.find(
+          (product: any) =>
+            String(product.name).toLowerCase() ===
+            normalizedForcedProduct.toLowerCase()
+        )
+      : null;
 
     let productContext;
 
     // If forcedProduct is provided, skip product resolution and use it directly
-    if (forcedProduct) {
+    if (normalizedForcedProduct) {
       productContext = {
         productKnown: true,
-        matchedProduct: forcedProduct.trim(),
+        matchedProduct: selectedProduct?.name || normalizedForcedProduct,
+        candidateProducts: [selectedProduct?.name || normalizedForcedProduct],
       };
     } else {
       // Normal product resolution flow
       productContext = resolveProductContext({
         messageText: customerMessage,
-        hasMedia: false,
-        source: "DM",
+        hasMedia: normalizedHasMedia,
+        source: normalizedSource,
         products: products.map((p: any) => ({
           name: p.name,
           keywords: p.keywords ?? null,
+          availableVariantCount: Number(p.available_variant_count || 0),
+          variantCount: Number(p.variant_count || 0),
         })),
+        recentProductNames: safeRecentProducts,
       });
     }
 
@@ -155,8 +217,16 @@ router.post("/ai/suggest-reply", auth, checkReplyLimit, async (req: AuthRequest,
       confidence,
     });
 
+    // Seller manually selected a product, so clarification should never be returned.
+    const finalDecision = normalizedForcedProduct
+      ? {
+          action: "REPLY" as const,
+          reason: "Seller selected product manually",
+        }
+      : decision;
+
     // If ASK → generate smart clarification (only if no forcedProduct)
-    if (decision.action === "ASK" && !forcedProduct) {
+    if (finalDecision.action === "ASK") {
       const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
       const clarificationPrompt = `
@@ -208,9 +278,10 @@ Reply text only. Nothing else.
         suggestions: [clarificationReply],
         decision: {
           action: "ASK",
-          reason: decision.reason,
+          reason: finalDecision.reason,
           productKnown: productContext.productKnown,
           intent,
+          productCandidates: productContext.candidateProducts || [],
         },
       });
     }
@@ -238,11 +309,24 @@ IMPORTANT: Only mention delivery if customer asks. Use the exact zone names abov
       deliveryContext = 'No delivery info available. If customer asks about delivery, say "Delivery charge area anusar lagcha."';
     }
 
+    const productsForPrompt = selectedProduct ? [selectedProduct] : products;
+    const forcedProductInstruction = normalizedForcedProduct
+      ? `
+  Selected Product (seller-confirmed): ${productContext.matchedProduct}
+  IMPORTANT:
+  - Seller already selected the product manually.
+  - Do NOT ask which product the customer means.
+  - Answer for this selected product only.
+  `
+      : "";
+
     const contextMessage = `
 Customer Message: ${customerMessage}
 
+  ${forcedProductInstruction}
+
 Available Products:
-${products.map((p: any) => {
+  ${productsForPrompt.map((p: any) => {
       const productVariants = variants.filter((v: any) => v.product_id === p.id);
       return `- ${p.name} (Rs. ${p.price})${p.keywords ? ` [also known as: ${p.keywords}]` : ''}
   Variants: ${productVariants.map((v: any) => `${v.color} ${v.size} (${v.available ? 'Available' : 'Out of stock'})`).join(', ')}${p.notes ? `\n  Notes: ${p.notes}` : ''}`;
@@ -279,10 +363,11 @@ ${deliveryContext}
       suggestions,
       decision: {
         action: "REPLY",
-        reason: decision.reason,
+        reason: finalDecision.reason,
         productKnown: productContext.productKnown,
         matchedProduct: productContext.matchedProduct,
         intent,
+        productCandidates: productContext.candidateProducts || [],
       },
     });
   } catch (err: any) {

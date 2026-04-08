@@ -13,23 +13,21 @@ import {
   User01,
   Zap,
 } from '@untitledui/icons'
-import { api, DeliveryZone, Product, PlanResponse, type ManualQrConfigResponse } from '../services/api'
+import {
+  api,
+  DeliveryZone,
+  Product,
+  PlanResponse,
+  type ManualQrConfigResponse,
+  type SuggestReplyResponse,
+} from '../services/api'
 import AppAlert from '../components/ui/AppAlert'
 import AppButton from '../components/ui/AppButton'
 import Products from './Products'
 import DeliveryZones from './DeliveryZones'
 import Upgrade from './Upgrade'
 
-interface ReplyResult {
-  suggestions: string[]
-  decision: {
-    action: 'ASK' | 'REPLY'
-    reason: string
-    productKnown: boolean
-    matchedProduct?: string
-    intent: string
-  }
-}
+type ReplyResult = SuggestReplyResponse
 
 type Tab = 'reply' | 'products' | 'delivery' | 'payment' | 'profile'
 
@@ -139,7 +137,9 @@ export default function Dashboard() {
   const [products, setProducts] = useState<Product[]>([])
   const [productsLoading, setProductsLoading] = useState(false)
   const [productSearch, setProductSearch] = useState('')
+  const [showProductSearch, setShowProductSearch] = useState(false)
   const [showProductPicker, setShowProductPicker] = useState(false)
+  const [recentProductNames, setRecentProductNames] = useState<string[]>([])
 
   useEffect(() => {
     let active = true
@@ -240,14 +240,32 @@ export default function Dashboard() {
     }
   }
 
-  // Filter products based on search, sort alphabetically, limit to 8
-  const filteredProducts = products
+  // Filter products based on search and sort alphabetically.
+  const searchFilteredProducts = products
     .filter(product =>
       product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
       (product.keywords && product.keywords.toLowerCase().includes(productSearch.toLowerCase()))
     )
     .sort((a, b) => a.name.localeCompare(b.name))
+
+  const productByName = new Map(products.map((product) => [product.name.toLowerCase(), product]))
+
+  const quickPickProducts = (result?.decision.productCandidates || [])
+    .map((name) => productByName.get(name.toLowerCase()))
+    .filter((product): product is Product => Boolean(product))
+
+  const quickPickNameSet = new Set(quickPickProducts.map((product) => product.name.toLowerCase()))
+
+  const browseProducts = searchFilteredProducts
+    .filter((product) => !quickPickNameSet.has(product.name.toLowerCase()))
     .slice(0, 8)
+
+  const addRecentProduct = (productName: string) => {
+    setRecentProductNames((previous) => {
+      const deduped = previous.filter((name) => name.toLowerCase() !== productName.toLowerCase())
+      return [productName, ...deduped].slice(0, 5)
+    })
+  }
 
   const handleProductSelect = async (productName: string) => {
     if (!customerMessage.trim()) return
@@ -255,11 +273,13 @@ export default function Dashboard() {
     setError('')
     setLoading(true)
     setShowProductPicker(false)
+    setShowProductSearch(false)
     setProductSearch('')
 
     try {
       const response = await api.suggestReply(customerMessage.trim(), undefined, productName)
       setResult(response)
+      addRecentProduct(productName)
       notify({
         type: 'success',
         title: 'Reply refreshed with selected product',
@@ -294,10 +314,22 @@ export default function Dashboard() {
     setLoading(true)
     setResult(null)
     setShowProductPicker(false)
+    setShowProductSearch(false)
 
     try {
-      const response = await api.suggestReply(customerMessage.trim())
+      const response = await api.suggestReply(
+        customerMessage.trim(),
+        undefined,
+        undefined,
+        {
+          source: 'DM',
+          recentProducts: recentProductNames,
+        }
+      )
       setResult(response)
+      if (response.decision.matchedProduct) {
+        addRecentProduct(response.decision.matchedProduct)
+      }
       // Show product picker if AI asks for clarification
       if (response.decision.action === 'ASK') {
         // Refetch products to ensure we have the latest list
@@ -361,6 +393,7 @@ export default function Dashboard() {
     setResult(null)
     setError('')
     setShowProductPicker(false)
+    setShowProductSearch(false)
     setProductSearch('')
   }
 
@@ -659,40 +692,90 @@ Location/Address:`
                       {showProductPicker && (
                         <div className="product-picker">
                           <div className="product-picker-title">
-                            💡 Select the product you're asking about:
+                            💡 Pick a product with one tap:
                           </div>
 
-                          {/* Search input */}
-                          <input
-                            type="text"
-                            placeholder="Search product..."
-                            value={productSearch}
-                            onChange={(e) => setProductSearch(e.target.value)}
-                            className="product-picker-search"
-                          />
+                          {quickPickProducts.length > 0 && (
+                            <>
+                              <div className="product-picker-subtitle">Quick picks</div>
+                              <div className="product-picker-caption">
+                                Based on stock-ready products and your recent choices.
+                              </div>
+                              <div className="product-chip-grid">
+                                {quickPickProducts.map((product) => (
+                                  <button
+                                    key={product.id}
+                                    onClick={() => handleProductSelect(product.name)}
+                                    className="product-chip-btn"
+                                  >
+                                    {product.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          )}
 
-                          {/* Product chips */}
-                          {filteredProducts.length > 0 ? (
-                            <div className="product-chip-grid">
-                              {filteredProducts.map((product) => (
-                                <button
-                                  key={product.id}
-                                  onClick={() => handleProductSelect(product.name)}
-                                  className="product-chip-btn"
-                                >
-                                  {product.name}
-                                </button>
-                              ))}
+                          {recentProductNames.length > 0 && (
+                            <div className="product-picker-recent">
+                              Recent picks: {recentProductNames.join(' • ')}
                             </div>
-                          ) : (
+                          )}
+
+                          {!showProductSearch && products.length > 0 && (
+                            <AppButton
+                              onClick={() => setShowProductSearch(true)}
+                              variant="secondary"
+                              size="sm"
+                              className="product-picker-search-toggle"
+                            >
+                              Can&apos;t find it? Search products
+                            </AppButton>
+                          )}
+
+                          {showProductSearch && (
+                            <>
+                              {/* Search input */}
+                              <input
+                                type="text"
+                                placeholder="Search product..."
+                                value={productSearch}
+                                onChange={(e) => setProductSearch(e.target.value)}
+                                className="product-picker-search"
+                              />
+
+                              {/* Product chips */}
+                              {browseProducts.length > 0 ? (
+                                <div className="product-chip-grid">
+                                  {browseProducts.map((product) => (
+                                    <button
+                                      key={product.id}
+                                      onClick={() => handleProductSelect(product.name)}
+                                      className="product-chip-btn"
+                                    >
+                                      {product.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="product-picker-empty">
+                                  {productSearch
+                                    ? 'No products found matching your search.'
+                                    : 'No additional products to show right now.'}
+                                </div>
+                              )}
+                            </>
+                          )}
+
+                          {products.length === 0 && (
                             <div className="product-picker-empty">
-                              {productSearch ? 'No products found matching your search.' : 'Add products first to use this feature.'}
+                              Add at least a few top products to unlock quick replies.
                             </div>
                           )}
 
                           <AppButton
                             onClick={() => {
                               setShowProductPicker(false)
+                              setShowProductSearch(false)
                               setProductSearch('')
                             }}
                             variant="secondary"

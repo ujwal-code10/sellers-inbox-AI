@@ -835,6 +835,26 @@ body {
   margin-bottom: 12px;
 }
 
+.product-picker-subtitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #3f5a4d;
+  margin-bottom: 8px;
+}
+
+.product-picker-caption {
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #5a7267;
+}
+
+.product-picker-recent {
+  margin-top: 10px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #577065;
+}
+
 .product-picker-search {
   width: 100%;
   padding: 10px 12px;
@@ -887,6 +907,11 @@ body {
 
 .product-picker-cancel {
   margin-top: 12px;
+}
+
+.product-picker-search-toggle {
+  margin-top: 10px;
+  margin-bottom: 10px;
 }
 
 .debug-info {

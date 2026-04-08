@@ -107,6 +107,22 @@ export interface DeliveryZone {
   created_at?: string
 }
 
+type MessageSource = 'DM' | 'STORY_REPLY' | 'REEL_FORWARD'
+
+export interface SuggestReplyDecision {
+  action: 'ASK' | 'REPLY'
+  reason: string
+  productKnown: boolean
+  matchedProduct?: string
+  intent: string
+  productCandidates?: string[]
+}
+
+export interface SuggestReplyResponse {
+  suggestions: string[]
+  decision: SuggestReplyDecision
+}
+
 class ApiClient {
   private getCsrfToken(): string | null {
     if (typeof document === 'undefined') {
@@ -232,11 +248,19 @@ class ApiClient {
   async suggestReply(
     customerMessage: string,
     tone?: string,
-    forcedProduct?: string
-  ): Promise<{ suggestions: string[]; decision: any }> {
+    forcedProduct?: string,
+    options?: {
+      source?: MessageSource
+      hasMedia?: boolean
+      recentProducts?: string[]
+    }
+  ): Promise<SuggestReplyResponse> {
     const body: any = { customerMessage }
     if (tone) body.tone = tone
     if (forcedProduct) body.forcedProduct = forcedProduct
+    if (options?.source) body.source = options.source
+    if (typeof options?.hasMedia === 'boolean') body.hasMedia = options.hasMedia
+    if (options?.recentProducts?.length) body.recentProducts = options.recentProducts
 
     return this.request('/ai/suggest-reply', {
       method: 'POST',

@@ -1,80 +1,128 @@
 # API Contract (Current MVP)
 
-Source of truth: [MASTER_SPEC.md](../MASTER_SPEC.md), Section 7.
+Source of truth: [MASTER_SPEC.md](../MASTER_SPEC.md)
 
 ## Base and Conventions
-- Base URL (local): http://localhost:4000/api
-- Auth header: Authorization: Bearer <token>
-- Token expiry: 7 days
-- Standard error: { "error": "message" }
-- Paywall error: { "error": "...", "upgrade": true }
+- Base URL (local): http://localhost:4000
+- API prefix: `/api`
+- Standard error: `{ "error": "message" }`
+- Paywall error: `{ "error": "...", "upgrade": true }`
 
-This API powers an AI-assisted reply tool, not a full inbox automation system.
+## Authentication Model
+- Primary auth mode: HttpOnly cookie sessions (seller and admin)
+- Access + refresh cookies are rotated server-side
+- CSRF protection: `X-CSRF-Token` is required on unsafe methods when authenticated via cookies
+- Authorization header support still exists for compatibility, but frontend should use cookie sessions
 
 ## Health
-GET /health
+- GET `/health`
+- Response: `{ "status": "ok" }`
 
-Response:
+## Seller Auth (`/api/auth`)
+- POST `/signup`
+  - Request: `{ name, email, password }`
+  - Response: `{ user }` and auth cookies are set
+- POST `/login`
+  - Request: `{ email, password }`
+  - Response: `{ user }` and auth cookies are set
+- POST `/refresh`
+  - Response: `{ success: true }` and rotated auth cookies
+- POST `/logout`
+  - Response: `{ message }` and cookies cleared
+- GET `/me`
+  - Response: `{ user }`
+- PATCH `/me`
+  - Request: `{ name }`
+  - Response: `{ user }`
+- POST `/forgot-password`
+  - Request: `{ email }`
+  - Response: generic success message (no account enumeration)
+
+## Products (`/api/products`)
+- GET `/products`
+- POST `/products`
+  - Request: `{ name, price, keywords?, notes? }`
+  - Free-tier product limit enforced server-side
+- PATCH `/products/:id`
+- DELETE `/products/:id`
+
+## Variants (`/api`)
+- GET `/products/:id/variants`
+- POST `/products/:id/variants`
+  - Request: `{ color, size, available? }`
+- PATCH `/variants/:id`
+  - Request: `{ available }`
+
+## Delivery Zones (`/api`)
+- GET `/delivery-zones`
+- POST `/delivery-zones`
+- PATCH `/delivery-zones/:id`
+- DELETE `/delivery-zones/:id`
+
+## AI (`/api/ai`)
+- POST `/ai/suggest-reply`
+- Request:
+```json
 {
-  "status": "ok"
+  "customerMessage": "pp",
+  "tone": "friendly",
+  "forcedProduct": "Blue Hoodie",
+  "source": "DM",
+  "hasMedia": false,
+  "recentProducts": ["Blue Hoodie", "Black Hoodie"]
 }
+```
+- Notes:
+  - `checkReplyLimit` middleware is enforced
+  - `forcedProduct` hard-locks reply generation for the selected product
+  - For vague messages, ASK responses include quick product candidates
+- Response shape:
+```json
+{
+  "suggestions": ["reply text"],
+  "decision": {
+    "action": "ASK | REPLY",
+    "reason": "...",
+    "productKnown": true,
+    "matchedProduct": "Blue Hoodie",
+    "intent": "PRICE",
+    "productCandidates": ["Blue Hoodie", "Black Hoodie"]
+  }
+}
+```
 
-## Auth (/auth)
-- POST /auth/signup
-  - Request: { name, email, password }
-  - Response: { token, user }
-- POST /auth/login
-  - Request: { email, password }
-  - Response: { token, user }
-- GET /auth/me
-  - Response: { user }
+## Payments (`/api/payments`)
+- GET `/plans`
+- GET `/manual-qr/config`
+- GET `/manual-qr/status`
+- POST `/manual-qr/submit`
+  - Request: `{ billing, paymentReference, payerName, note? }`
+  - Current MVP does not include screenshot file upload
+  - Submission remains pending until admin approves/rejects
+- POST `/esewa/initiate`
+- POST `/esewa/verify`
 
-## Products (/products)
-- GET /products
-  - List seller products
-- POST /products
-  - Create product
-  - checkProductLimit middleware applies for Free plan
-- PATCH /products/:id
-  - Update owned product
-- DELETE /products/:id
-  - Delete owned product and cascade variants
+## Admin (`/api/admin`)
 
-## Variants (/api)
-- GET /products/:id/variants
-  - List variants for owned product
-- POST /products/:id/variants
-  - Request: { color, size, available? }
-- PATCH /variants/:id
-  - Request: { available: boolean }
-  - Ownership checked via product join
+### Admin Auth
+- POST `/auth/login`
+- POST `/auth/refresh`
+- POST `/auth/logout`
+- GET `/auth/me`
+- POST `/auth/change-password`
+- POST `/auth/change-email`
+- POST `/auth/create-admin` (super_admin only)
 
-## Delivery Zones (/api)
-- GET /delivery-zones
-- POST /delivery-zones
-- PATCH /delivery-zones/:id
-- DELETE /delivery-zones/:id
-
-Notes:
-- Only delivery_zones is valid.
-- delivery_settings is removed.
-
-## AI (/ai)
-- POST /ai/suggest-reply
-  - Request: { customerMessage, tone? }
-  - checkReplyLimit middleware applies
-  - Uses product + variant + delivery zone context
-  - On success increments usage_daily
-
-## Payments (/payments)
-- GET /payments/plans
-  - Returns current plan, usage, pricing
-- POST /payments/esewa/initiate
-  - Request: { billing: "monthly" | "yearly" }
-- POST /payments/esewa/verify
-  - Request: { encodedData, billing }
+### Admin Operations
+- `/users` - list/details/ban/unban/user usage/user transactions
+- `/transactions` - list/stats/approve/reject manual QR submissions
+- `/subscriptions` - list/update/grant/revoke
+- `/ai-usage` - logs + stats + costs
+- `/settings` - read and update system settings
+- `/dashboard` - aggregated admin metrics
 
 ## Out of Scope (MVP)
 - Auto-send replies
 - Meta webhook inbox sync
+- File upload storage for payment screenshot proof
 - Full order management
