@@ -472,7 +472,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
 
                     {/* Bulk actions */}
                     {variants.length > 0 && (
-                      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                      <div className="variants-actions">
                         <AppButton
                           onClick={() => handleMarkAll(product.id, true)}
                           variant="secondary"
@@ -492,67 +492,32 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
 
                     {/* ── Variant rows with instant toggle ── */}
                     {variants.length === 0 ? (
-                      <p style={{ fontSize: 13, color: '#888', marginBottom: 12 }}>
+                      <p className="variants-empty-hint">
                         No variants yet — add variants below
                       </p>
                     ) : (
-                      <div className="variants-list" style={{ marginBottom: 12 }}>
+                      <div className="variants-list">
                         {variants.map(variant => (
                           <div
                             key={variant.id}
-                            className="variant-item"
-                            style={{
-                              display: 'flex', alignItems: 'center',
-                              justifyContent: 'space-between',
-                              padding: '8px 12px',
-                              borderRadius: 8,
-                              border: '0.5px solid #e5e5e5',
-                              marginBottom: 6,
-                              background: variant.available ? '#fff' : '#fafafa',
-                              opacity: variant.available ? 1 : 0.6
-                            }}
+                            className={`variant-item ${variant.available ? 'is-available' : 'is-unavailable'}`}
                           >
-                            <span style={{
-                              fontSize: 13,
-                              fontWeight: 500,
-                              textDecoration: variant.available ? 'none' : 'line-through',
-                              color: variant.available ? '#1a1a1a' : '#999'
-                            }}>
+                            <span className={`variant-name ${variant.available ? '' : 'is-unavailable'}`}>
                               {variant.color} — {variant.size}
                             </span>
-                            <label style={{
-                              display: 'flex', alignItems: 'center',
-                              gap: 8, cursor: 'pointer'
-                            }}>
-                              <span style={{
-                                fontSize: 11,
-                                color: variant.available ? '#085041' : '#791F1F'
-                              }}>
+                            <div className="variant-control">
+                              <span className={`variant-stock-text ${variant.available ? 'in' : 'out'}`}>
                                 {variant.available ? 'In stock' : 'Sold out'}
                               </span>
-                              {/* Toggle switch */}
-                              <div
+                              <button
+                                type="button"
                                 onClick={() => handleToggleVariant(variant)}
-                                style={{
-                                  width: 36, height: 20,
-                                  borderRadius: 10,
-                                  background: variant.available ? '#1D9E75' : '#ccc',
-                                  position: 'relative',
-                                  cursor: 'pointer',
-                                  transition: 'background 0.2s'
-                                }}
+                                className={`variant-toggle ${variant.available ? 'is-on' : 'is-off'}`}
+                                aria-label={`${variant.available ? 'Mark sold out' : 'Mark in stock'} ${variant.color} ${variant.size}`}
                               >
-                                <div style={{
-                                  position: 'absolute',
-                                  top: 2,
-                                  left: variant.available ? 18 : 2,
-                                  width: 16, height: 16,
-                                  borderRadius: '50%',
-                                  background: '#fff',
-                                  transition: 'left 0.2s'
-                                }} />
-                              </div>
-                            </label>
+                                <span className="variant-toggle-thumb" />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -560,40 +525,35 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
 
                     {/* ── Add variants via grid ── */}
                     {showVariantGrid === product.id ? (
-                      <div style={{
-                        background: '#f9f9f9', borderRadius: 10,
-                        padding: 16, border: '0.5px solid #e5e5e5',
-                        marginBottom: 12
-                      }}>
-                        <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 12 }}>
+                      <div className="variant-builder-card">
+                        <div className="variant-builder-title">
                           Add variants
                         </div>
 
                         {!gridGenerated ? (
                           <>
-                            <div className="form-group">
-                              <label style={{ fontSize: 12 }}>
-                                Colors (comma separated)
-                              </label>
-                              <input
-                                type="text"
-                                value={gridColors}
-                                onChange={e => setGridColors(e.target.value)}
-                                placeholder="Red, Blue, Black, White"
-                              />
+                            <div className="variant-builder-fields">
+                              <div className="form-group variant-builder-field">
+                                <label>Colors (comma separated)</label>
+                                <input
+                                  type="text"
+                                  value={gridColors}
+                                  onChange={e => setGridColors(e.target.value)}
+                                  placeholder="Red, Blue, Black, White"
+                                />
+                              </div>
+                              <div className="form-group variant-builder-field">
+                                <label>Sizes (comma separated)</label>
+                                <input
+                                  type="text"
+                                  value={gridSizes}
+                                  onChange={e => setGridSizes(e.target.value)}
+                                  placeholder="S, M, L, XL"
+                                />
+                              </div>
                             </div>
-                            <div className="form-group">
-                              <label style={{ fontSize: 12 }}>
-                                Sizes (comma separated)
-                              </label>
-                              <input
-                                type="text"
-                                value={gridSizes}
-                                onChange={e => setGridSizes(e.target.value)}
-                                placeholder="S, M, L, XL"
-                              />
-                            </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
+
+                            <div className="variant-builder-actions">
                               <AppButton
                                 onClick={handleGenerateGrid}
                                 className="btn-primary"
@@ -617,13 +577,13 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
                           </>
                         ) : (
                           <>
-                            <div style={{ fontSize: 12, color: '#666', marginBottom: 10 }}>
+                            <div className="variant-grid-note">
                               {gridVariants.length} combinations generated —
                               toggle off what's sold out
                             </div>
 
                             {/* Bulk select for grid */}
-                            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                            <div className="variant-grid-actions">
                               <AppButton
                                 onClick={() => handleMarkAllGrid(true)}
                                 variant="secondary"
@@ -641,52 +601,25 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
                             </div>
 
                             {/* Grid */}
-                            <div style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-                              gap: 6, marginBottom: 14
-                            }}>
+                            <div className="variant-grid-list">
                               {gridVariants.map((v, i) => (
-                                <div
+                                <button
+                                  type="button"
                                   key={i}
                                   onClick={() => toggleGridVariant(i)}
-                                  style={{
-                                    display: 'flex', alignItems: 'center',
-                                    gap: 8, padding: '7px 10px',
-                                    borderRadius: 8, cursor: 'pointer',
-                                    border: `0.5px solid ${v.available ? '#1D9E75' : '#e5e5e5'}`,
-                                    background: v.available ? '#E1F5EE' : '#fafafa',
-                                    opacity: v.available ? 1 : 0.5,
-                                    userSelect: 'none'
-                                  }}
+                                  className={`variant-grid-chip ${v.available ? 'is-available' : 'is-unavailable'}`}
                                 >
-                                  <div style={{
-                                    width: 14, height: 14,
-                                    borderRadius: 3,
-                                    border: `1.5px solid ${v.available ? '#1D9E75' : '#ccc'}`,
-                                    background: v.available ? '#1D9E75' : 'transparent',
-                                    flexShrink: 0,
-                                    display: 'flex', alignItems: 'center',
-                                    justifyContent: 'center'
-                                  }}>
-                                    {v.available && (
-                                      <span style={{
-                                        color: '#fff', fontSize: 9, fontWeight: 700
-                                      }}>✓</span>
-                                    )}
-                                  </div>
-                                  <span style={{
-                                    fontSize: 12,
-                                    color: v.available ? '#085041' : '#999',
-                                    fontWeight: v.available ? 500 : 400
-                                  }}>
+                                  <span className={`variant-grid-check ${v.available ? 'is-checked' : ''}`}>
+                                    {v.available ? '✓' : ''}
+                                  </span>
+                                  <span className="variant-grid-text">
                                     {v.color} / {v.size}
                                   </span>
-                                </div>
+                                </button>
                               ))}
                             </div>
 
-                            <div style={{ display: 'flex', gap: 8 }}>
+                            <div className="variant-builder-actions">
                               <AppButton
                                 onClick={() => handleSaveVariants(product.id)}
                                 className="btn-primary"
@@ -717,7 +650,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
                         }}
                         className="btn-add-small"
                         size="sm"
-                        style={{ marginBottom: 12 }}
+                        style={{ marginBottom: 10 }}
                       >
                         + Add variants
                       </AppButton>
