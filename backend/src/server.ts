@@ -13,6 +13,7 @@ import { initializeDatabase } from "./utils/init.js";
 import app from "./app.js";
 
 const PORT = parseInt(process.env.PORT || "4000", 10);
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 async function startServer() {
   console.log("\n🚀 Starting Seller Inbox AI Server...\n");
@@ -30,6 +31,11 @@ async function startServer() {
 
   // Start the HTTP server
   app.listen(PORT, () => {
+    if (IS_PRODUCTION) {
+      console.log(`\nServer running on port ${PORT}\n`);
+      return;
+    }
+
     console.log(`\n✅ Server running on http://localhost:${PORT}`);
     console.log(`   Admin panel: http://localhost:5173/admin/login (dev)`);
     console.log(`   API endpoint: http://localhost:${PORT}/api/admin\n`);

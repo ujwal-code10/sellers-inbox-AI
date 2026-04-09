@@ -1,113 +1,32 @@
-import { useState, useEffect, type ComponentType } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useUIFeedback } from '../context/UIFeedbackContext'
 import {
-  Copy06,
-  CreditCard01,
-  Edit03,
-  LogOut01,
-  MarkerPin02,
-  MessageChatCircle,
-  Package,
-  User01,
-  Zap,
-} from '@untitledui/icons'
-import {
-  api,
-  DeliveryZone,
-  Product,
-  PlanResponse,
+  type DeliveryZone,
+  type Product,
+  type PlanResponse,
   type ManualQrConfigResponse,
   type SuggestReplyResponse,
-} from '../services/api'
-import AppAlert from '../components/ui/AppAlert'
-import AppButton from '../components/ui/AppButton'
+} from '../services/api/types'
+import { aiApi } from '../services/api/aiApi'
+import { authApi } from '../services/api/authApi'
+import { deliveryApi } from '../services/api/deliveryApi'
+import { paymentApi } from '../services/api/paymentApi'
+import { productApi } from '../services/api/productApi'
 import Products from './Products'
 import DeliveryZones from './DeliveryZones'
 import Upgrade from './Upgrade'
+import { copyToClipboard } from './dashboard/clipboard'
+import { dashboardNavItems, type Tab } from './dashboard/dashboardConfig'
+import PaywallModal from './dashboard/PaywallModal'
+import DashboardSidebar from './dashboard/DashboardSidebar'
+import DashboardContentHeader from './dashboard/DashboardContentHeader'
+import DashboardProfilePanel from './dashboard/DashboardProfilePanel'
+import DashboardReplyTab from './dashboard/DashboardReplyTab'
+import { captureClientError } from '../services/monitoring'
 
 type ReplyResult = SuggestReplyResponse
-
-type Tab = 'reply' | 'products' | 'delivery' | 'payment' | 'profile'
-
-interface DashboardNavItem {
-  key: Tab
-  label: string
-  note: string
-  icon: ComponentType<{ className?: string }>
-}
-
-const dashboardNavItems: DashboardNavItem[] = [
-  {
-    key: 'reply',
-    label: 'Reply',
-    note: 'Generate smart response suggestions',
-    icon: MessageChatCircle,
-  },
-  {
-    key: 'products',
-    label: 'Products',
-    note: 'Manage catalog and variants',
-    icon: Package,
-  },
-  {
-    key: 'delivery',
-    label: 'Delivery',
-    note: 'Configure zones and COD rules',
-    icon: MarkerPin02,
-  },
-  {
-    key: 'payment',
-    label: 'Payment',
-    note: 'Upgrade plan and billing',
-    icon: CreditCard01,
-  },
-  {
-    key: 'profile',
-    label: 'Profile',
-    note: 'Account details and usage',
-    icon: User01,
-  },
-]
-
-const tabHeadings: Record<Tab, { title: string; description: string }> = {
-  reply: {
-    title: 'AI Reply Workspace',
-    description: 'Paste customer chats and get polished, context-aware replies in seconds.',
-  },
-  products: {
-    title: 'Product Catalog',
-    description: 'Keep products and variants updated so replies stay accurate.',
-  },
-  delivery: {
-    title: 'Delivery Settings',
-    description: 'Set up delivery zones and COD options for cleaner operations.',
-  },
-  payment: {
-    title: 'Billing & Plan',
-    description: 'Manage your subscription and unlock unlimited usage.',
-  },
-  profile: {
-    title: 'Profile',
-    description: 'Manage your account details, plan usage, and actions.',
-  },
-}
-
-async function copyToClipboard(text: string) {
-  try {
-    await navigator.clipboard.writeText(text)
-    return true
-  } catch {
-    const textArea = document.createElement('textarea')
-    textArea.value = text
-    document.body.appendChild(textArea)
-    textArea.select()
-    const copied = document.execCommand('copy')
-    document.body.removeChild(textArea)
-    return copied
-  }
-}
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
@@ -145,10 +64,10 @@ export default function Dashboard() {
     let active = true
 
     Promise.all([
-      api.getProducts(),
-      api.getDeliveryZones(),
-      api.getPlans(),
-      api.getManualQrConfig(),
+      productApi.getProducts(),
+      deliveryApi.getDeliveryZones(),
+      paymentApi.getPlans(),
+      paymentApi.getManualQrConfig(),
     ])
       .then(([productsData, zonesData, plan, qrConfig]) => {
         if (!active) return
@@ -160,7 +79,9 @@ export default function Dashboard() {
         setCachedQrConfig(qrConfig)
       })
       .catch((err) => {
-        console.error('Dashboard prefetch failed:', err)
+        captureClientError('Dashboard prefetch failed', err, {
+          scope: 'DashboardPrefetch',
+        })
       })
 
     return () => {
@@ -211,11 +132,13 @@ export default function Dashboard() {
 
     setProductsLoading(true)
     try {
-      const productsData = await api.getProducts()
+      const productsData = await productApi.getProducts()
       setProducts(productsData)
       setCachedProducts(productsData)
     } catch (err) {
-      console.error('Failed to load products:', err)
+      captureClientError('Failed to load products', err, {
+        scope: 'DashboardLoadProducts',
+      })
     } finally {
       setProductsLoading(false)
     }
@@ -229,7 +152,7 @@ export default function Dashboard() {
 
     setPlanLoading(true)
     try {
-      const data = await api.getPlans()
+      const data = await paymentApi.getPlans()
       setPlanData(data)
       setCachedPlan(data)
     } catch (err) {
@@ -277,7 +200,7 @@ export default function Dashboard() {
     setProductSearch('')
 
     try {
-      const response = await api.suggestReply(customerMessage.trim(), undefined, productName)
+      const response = await aiApi.suggestReply(customerMessage.trim(), undefined, productName)
       setResult(response)
       addRecentProduct(productName)
       notify({
@@ -317,7 +240,7 @@ export default function Dashboard() {
     setShowProductSearch(false)
 
     try {
-      const response = await api.suggestReply(
+      const response = await aiApi.suggestReply(
         customerMessage.trim(),
         undefined,
         undefined,
@@ -431,7 +354,7 @@ Location/Address:`
 
     setSavingName(true)
     try {
-      const response = await api.updateMeName(nextName)
+      const response = await authApi.updateMeName(nextName)
       setProfileName(response.user.name)
       setNameDraft(response.user.name)
       setEditingName(false)
@@ -467,336 +390,63 @@ Location/Address:`
 
   return (
     <div className="dashboard">
-      {/* ── Paywall Modal ── */}
-      {showPaywall && (
-        <div
-          className="modal-overlay"
-          onClick={() => setShowPaywall(false)}
-        >
-          <div
-            className="modal paywall-modal"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="paywall-icon"><Zap className="paywall-icon-svg" /></div>
-            <h3 className="paywall-title">
-              {paywallReason === 'replies'
-                ? "You've used all 20 free replies today"
-                : "You've reached the 5 product limit"
-              }
-            </h3>
-            <p className="paywall-message">
-              {paywallReason === 'replies'
-                ? 'Upgrade to Pro for unlimited replies every day'
-                : 'Upgrade to Pro for unlimited products'
-              }
-            </p>
-            <AppButton
-              onClick={() => navigate('/upgrade')}
-              variant="primary"
-              size="lg"
-              fullWidth
-              className="paywall-upgrade-btn"
-            >
-              Upgrade to Pro — Rs. 299/month
-            </AppButton>
-            <AppButton
-              onClick={() => setShowPaywall(false)}
-              variant="secondary"
-              fullWidth
-            >
-              Maybe later
-            </AppButton>
-          </div>
-        </div>
-      )}
+      <PaywallModal
+        isOpen={showPaywall}
+        reason={paywallReason}
+        onClose={() => setShowPaywall(false)}
+        onUpgrade={() => navigate('/upgrade')}
+      />
 
       <div className="dashboard-shell">
-        <aside className="dashboard-sidebar">
-          <div className="sidebar-brand">
-            <div className="sidebar-brand-mark">
-              <Zap className="sidebar-brand-icon" />
-            </div>
-            <div>
-              <p className="sidebar-brand-kicker">Seller Workspace</p>
-              <h1>Inbox AI</h1>
-            </div>
-          </div>
-
-          <p className="sidebar-section-label">Main</p>
-          <nav className="sidebar-nav" aria-label="Dashboard navigation">
-            {dashboardNavItems.map((item, index) => {
-              const Icon = item.icon
-              const isActive = activeTab === item.key
-
-              return (
-                <button
-                  key={item.key}
-                  className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
-                  onClick={() => setActiveTab(item.key)}
-                  style={{ animationDelay: `${0.06 * index}s` }}
-                >
-                  <Icon className="sidebar-nav-icon" />
-                  <span className="sidebar-nav-copy">
-                    <span className="sidebar-nav-label">{item.label}</span>
-                    <span className="sidebar-nav-note">{item.note}</span>
-                  </span>
-                </button>
-              )
-            })}
-          </nav>
-
-          <p className="sidebar-section-label">Account</p>
-          <div className="sidebar-footer">
-            <button
-              type="button"
-              className="sidebar-upgrade"
-              onClick={() => setActiveTab('payment')}
-            >
-              <Zap className="sidebar-upgrade-icon" />
-              <span>
-                <strong>Upgrade to Pro</strong>
-                <small>Unlimited replies and products</small>
-              </span>
-            </button>
-
-            <div className="sidebar-profile">
-              <div className="sidebar-profile-avatar">
-                <User01 className="sidebar-profile-icon" />
-              </div>
-              <div className="sidebar-profile-copy">
-                <span className="sidebar-profile-name">{profileName || 'Seller'}</span>
-                <span className="sidebar-profile-email">{user?.email ?? 'seller@inbox-ai.app'}</span>
-              </div>
-            </div>
-
-            <AppButton
-              onClick={logout}
-              className="sidebar-logout-btn"
-              variant="secondary"
-              size="sm"
-              fullWidth
-              leftIcon={<LogOut01 className="app-icon-sm" />}
-            >
-              Logout
-            </AppButton>
-          </div>
-        </aside>
+        <DashboardSidebar
+          activeTab={activeTab}
+          profileName={profileName}
+          userEmail={user?.email}
+          onSelectTab={setActiveTab}
+          onLogout={logout}
+        />
 
         <section className="dashboard-content">
-          <div className="dashboard-content-head">
-            <div>
-              <p className="dashboard-content-kicker">Seller Inbox AI</p>
-              <h2>{tabHeadings[activeTab].title}</h2>
-              <p>{tabHeadings[activeTab].description}</p>
-            </div>
-            <div className="dashboard-content-actions">
-              <AppButton
-                onClick={() => setActiveTab('payment')}
-                variant="pill"
-                size="sm"
-                leftIcon={<Zap className="app-icon-sm" />}
-              >
-                Upgrade
-              </AppButton>
-              <AppButton
-                onClick={logout}
-                className="dashboard-mobile-logout"
-                variant="danger"
-                size="sm"
-                leftIcon={<LogOut01 className="app-icon-sm" />}
-              >
-                Logout
-              </AppButton>
-            </div>
-          </div>
+          <DashboardContentHeader
+            activeTab={activeTab}
+            onUpgrade={() => setActiveTab('payment')}
+            onLogout={logout}
+          />
 
           <main className="dashboard-main">
-            {/* Reply Tab */}
             {activeTab === 'reply' && (
-              <section className="dashboard-tab-wrap dashboard-tab-wrap-reply">
-                <div className="reply-generator">
-                  <div className="input-section">
-                    <label htmlFor="customerMessage">Customer Message</label>
-                    <textarea
-                      id="customerMessage"
-                      value={customerMessage}
-                      onChange={(e) => {
-                        setCustomerMessage(e.target.value)
-                        setShowProductPicker(false)
-                      }}
-                      placeholder="Paste customer message here...&#10;&#10;Example: Blue hoodie cha? Price kati ho?"
-                      rows={4}
-                    />
-                    <div className="button-row">
-                      <AppButton
-                        onClick={handleGenerate}
-                        className="btn-generate-modern"
-                        loading={loading}
-                        loadingText="Generating..."
-                        fullWidth
-                        leftIcon={<Zap className="app-icon-sm" />}
-                      >
-                        Generate Reply
-                      </AppButton>
-                      {(customerMessage || result) && (
-                        <AppButton onClick={handleClear} className="btn-clear-modern" variant="secondary">
-                          Clear
-                        </AppButton>
-                      )}
-                    </div>
-                    <div className="reply-order-form-wrap">
-                      <AppButton
-                        onClick={handleCopyOrderForm}
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        leftIcon={<Copy06 className="app-icon-sm" />}
-                      >
-                        {orderFormCopied ? '✓ Copied!' : 'Copy order form'}
-                      </AppButton>
-                    </div>
-                  </div>
-
-                  {error ? (
-                    <AppAlert type="error" title="Could not generate reply">
-                      {error}
-                    </AppAlert>
-                  ) : null}
-
-                  {result && (
-                    <div className="results-section">
-                      <div className={`action-badge ${result.decision.action.toLowerCase()}`}>
-                        {result.decision.action === 'ASK'
-                          ? '❓ Clarification Needed'
-                          : '✅ Reply Suggestions'
-                        }
-                      </div>
-                      <div className="suggestions-list">
-                        {result.suggestions.map((suggestion, index) => (
-                          <div key={index} className="suggestion-card">
-                            <p className="suggestion-text">{suggestion}</p>
-                            <AppButton
-                              onClick={() => handleCopy(suggestion, index)}
-                              className="suggestion-copy-btn"
-                              variant="secondary"
-                              size="sm"
-                              leftIcon={<Copy06 className="app-icon-sm" />}
-                            >
-                              {copiedIndex === index ? '✓ Copied!' : '📋 Copy'}
-                            </AppButton>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Product Picker - shows when AI asks for clarification */}
-                      {showProductPicker && (
-                        <div className="product-picker">
-                          <div className="product-picker-title">
-                            💡 Pick a product with one tap:
-                          </div>
-
-                          {quickPickProducts.length > 0 && (
-                            <>
-                              <div className="product-picker-subtitle">Quick picks</div>
-                              <div className="product-picker-caption">
-                                Based on stock-ready products and your recent choices.
-                              </div>
-                              <div className="product-chip-grid">
-                                {quickPickProducts.map((product) => (
-                                  <button
-                                    key={product.id}
-                                    onClick={() => handleProductSelect(product.name)}
-                                    className="product-chip-btn"
-                                  >
-                                    {product.name}
-                                  </button>
-                                ))}
-                              </div>
-                            </>
-                          )}
-
-                          {recentProductNames.length > 0 && (
-                            <div className="product-picker-recent">
-                              Recent picks: {recentProductNames.join(' • ')}
-                            </div>
-                          )}
-
-                          {!showProductSearch && products.length > 0 && (
-                            <AppButton
-                              onClick={() => setShowProductSearch(true)}
-                              variant="secondary"
-                              size="sm"
-                              className="product-picker-search-toggle"
-                            >
-                              Can&apos;t find it? Search products
-                            </AppButton>
-                          )}
-
-                          {showProductSearch && (
-                            <>
-                              {/* Search input */}
-                              <input
-                                type="text"
-                                placeholder="Search product..."
-                                value={productSearch}
-                                onChange={(e) => setProductSearch(e.target.value)}
-                                className="product-picker-search"
-                              />
-
-                              {/* Product chips */}
-                              {browseProducts.length > 0 ? (
-                                <div className="product-chip-grid">
-                                  {browseProducts.map((product) => (
-                                    <button
-                                      key={product.id}
-                                      onClick={() => handleProductSelect(product.name)}
-                                      className="product-chip-btn"
-                                    >
-                                      {product.name}
-                                    </button>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="product-picker-empty">
-                                  {productSearch
-                                    ? 'No products found matching your search.'
-                                    : 'No additional products to show right now.'}
-                                </div>
-                              )}
-                            </>
-                          )}
-
-                          {products.length === 0 && (
-                            <div className="product-picker-empty">
-                              Add at least a few top products to unlock quick replies.
-                            </div>
-                          )}
-
-                          <AppButton
-                            onClick={() => {
-                              setShowProductPicker(false)
-                              setShowProductSearch(false)
-                              setProductSearch('')
-                            }}
-                            variant="secondary"
-                            size="sm"
-                            className="product-picker-cancel"
-                          >
-                            Cancel
-                          </AppButton>
-                        </div>
-                      )}
-
-                      {result.decision.action === 'REPLY' && result.decision.matchedProduct && (
-                        <div className="debug-info">
-                          <span>Product: {result.decision.matchedProduct}</span>
-                          <span>Intent: {result.decision.intent}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </section>
+              <DashboardReplyTab
+                customerMessage={customerMessage}
+                onCustomerMessageChange={(value) => {
+                  setCustomerMessage(value)
+                  setShowProductPicker(false)
+                }}
+                loading={loading}
+                onGenerate={handleGenerate}
+                onClear={handleClear}
+                showClearButton={Boolean(customerMessage || result)}
+                onCopyOrderForm={handleCopyOrderForm}
+                orderFormCopied={orderFormCopied}
+                error={error}
+                result={result}
+                copiedIndex={copiedIndex}
+                onCopySuggestion={handleCopy}
+                showProductPicker={showProductPicker}
+                quickPickProducts={quickPickProducts}
+                recentProductNames={recentProductNames}
+                showProductSearch={showProductSearch}
+                onEnableProductSearch={() => setShowProductSearch(true)}
+                productSearch={productSearch}
+                onProductSearchChange={setProductSearch}
+                browseProducts={browseProducts}
+                productsCount={products.length}
+                onProductSelect={handleProductSelect}
+                onCancelPicker={() => {
+                  setShowProductPicker(false)
+                  setShowProductSearch(false)
+                  setProductSearch('')
+                }}
+              />
             )}
 
             {activeTab === 'products' && (
@@ -829,154 +479,34 @@ Location/Address:`
               </section>
             )}
             {activeTab === 'profile' && (
-              <section className="dashboard-tab-wrap">
-                <div className="profile-layout">
-                  <section className="profile-card">
-                    <p className="profile-card-title">👤 Account</p>
-
-                    <div className="profile-row">
-                      <span className="profile-label">Name</span>
-                      
-                      
-                    {editingName ? (
-                      <div className="profile-name-editor">
-                        <input
-                          type="text"
-                          value={nameDraft}
-                          onChange={(e) => setNameDraft(e.target.value)}
-                          className="profile-name-input"
-                          aria-label="Edit account name"
-                        />
-                        <AppButton
-                          onClick={handleSaveName}
-                          size="sm"
-                          loading={savingName}
-                          loadingText="Saving..."
-                        >
-                          Save
-                        </AppButton>
-                        <AppButton
-                          onClick={() => {
-                            setNameDraft(profileName)
-                            setEditingName(false)
-                          }}
-                          size="sm"
-                          variant="secondary"
-                        >
-                          Cancel
-                        </AppButton>
-                      </div>
-                    ) : (
-                      <div className="profile-name-view">
-                        <span className="profile-value">{profileName || 'Seller'}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNameDraft(profileName)
-                            setEditingName(true)
-                          }}
-                          className="profile-edit-btn"
-                          aria-label="Edit name"
-                        >
-                          <Edit03 className="app-icon-sm" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="profile-row profile-row-last">
-                    <span className="profile-label">Email</span>
-                    <span className="profile-value">{user?.email ?? 'No email found'}</span>
-                  </div>
-                  </section>
-
-                  <section className="profile-card">
-                    <p className="profile-card-title">⚡ Your Plan</p>
-
-                  {!effectivePlanData && planLoading ? (
-                    <div className="profile-plan-empty">Loading plan details...</div>
-                  ) : !effectivePlanData ? (
-                    <div className="profile-plan-empty-wrap">
-                      <div className="profile-plan-empty">
-                        Plan details are unavailable right now.
-                      </div>
-                      <AppButton onClick={loadPlanData} variant="secondary" size="sm">
-                        Retry
-                      </AppButton>
-                    </div>
-                  ) : effectivePlanData.current.plan === 'pro' ? (
-                    <>
-                      <div className="profile-row">
-                        <span className="profile-label">Plan</span>
-                        <span className="profile-value">PRO ✓</span>
-                      </div>
-                      <div className="profile-row">
-                        <span className="profile-label">Replies</span>
-                        <span className="profile-value">Unlimited</span>
-                      </div>
-                      <div className="profile-row profile-row-gap">
-                        <span className="profile-label">Expires</span>
-                        <span className="profile-value">{proExpiryLabel}</span>
-                      </div>
-                      <AppButton
-                        onClick={() => navigate('/upgrade')}
-                        variant="secondary"
-                        size="sm"
-                      >
-                        Manage subscription
-                      </AppButton>
-                    </>
-                  ) : (
-                    <>
-                      <div className="profile-row">
-                        <span className="profile-label">Plan</span>
-                        <span className="profile-value">FREE</span>
-                      </div>
-                      <div className="profile-row profile-row-tight">
-                        <span className="profile-label">Replies today</span>
-                        <span className="profile-value">
-                          {repliesToday} / {repliesLimit ?? '∞'}
-                        </span>
-                      </div>
-
-                      <div className="profile-progress-track" aria-label="Replies usage progress">
-                        <div
-                          className="profile-progress-fill"
-                          style={{
-                            width: `${repliesProgressPercent}%`,
-                            background: repliesProgressColor,
-                          }}
-                        />
-                      </div>
-
-                      <div className="profile-progress-meta">
-                        {repliesProgressPercent}% used
-                      </div>
-
-                      <AppButton
-                        onClick={() => setActiveTab('payment')}
-                        size="sm"
-                        leftIcon={<Zap className="app-icon-sm" />}
-                      >
-                        Upgrade to Pro
-                      </AppButton>
-                    </>
-                  )}
-                  </section>
-
-                  <section className="profile-card">
-                    <p className="profile-card-title">Account Actions</p>
-                    <AppButton
-                      onClick={logout}
-                      variant="danger"
-                      size="sm"
-                      leftIcon={<LogOut01 className="app-icon-sm" />}
-                    >
-                      → Logout
-                    </AppButton>
-                  </section>
-                </div>
-              </section>
+              <DashboardProfilePanel
+                profileName={profileName}
+                userEmail={user?.email}
+                editingName={editingName}
+                nameDraft={nameDraft}
+                savingName={savingName}
+                planLoading={planLoading}
+                effectivePlanData={effectivePlanData}
+                proExpiryLabel={proExpiryLabel}
+                repliesToday={repliesToday}
+                repliesLimit={repliesLimit ?? null}
+                repliesProgressPercent={repliesProgressPercent}
+                repliesProgressColor={repliesProgressColor}
+                onNameDraftChange={setNameDraft}
+                onStartEditingName={() => {
+                  setNameDraft(profileName)
+                  setEditingName(true)
+                }}
+                onCancelEditingName={() => {
+                  setNameDraft(profileName)
+                  setEditingName(false)
+                }}
+                onSaveName={handleSaveName}
+                onRetryPlanLoad={loadPlanData}
+                onManageSubscription={() => navigate('/upgrade')}
+                onOpenPaymentTab={() => setActiveTab('payment')}
+                onLogout={logout}
+              />
             )}
           </main>
         </section>

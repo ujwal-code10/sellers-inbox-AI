@@ -1,0 +1,118 @@
+# Architecture Refactor TODO
+
+Status: Core refactor completed (April 2026)
+
+## Completed in this pass
+- Added top-level layered backend folders:
+  - `backend/src/controllers`
+  - `backend/src/models`
+  - `backend/src/schemas`
+  - `backend/src/services`
+- Refactored payments flow from route-monolith into layers:
+  - `backend/src/routes/payment.ts` (thin router)
+  - `backend/src/controllers/paymentController.ts`
+  - `backend/src/services/paymentService.ts`
+  - `backend/src/models/payment.ts`
+  - `backend/src/schemas/paymentSchemas.ts`
+- Refactored AI suggest-reply flow from route-monolith into layers:
+  - `backend/src/routes/ai.ts` (thin router)
+  - `backend/src/controllers/aiController.ts`
+  - `backend/src/services/aiReplyService.ts`
+  - `backend/src/services/aiUsageService.ts`
+  - `backend/src/models/ai.ts`
+  - `backend/src/schemas/aiSchemas.ts`
+- Refactored auth flow from route-monolith into layers:
+  - `backend/src/routes/auth.ts` (thin router)
+  - `backend/src/controllers/authController.ts`
+  - `backend/src/services/authService.ts`
+  - `backend/src/models/auth.ts`
+  - `backend/src/schemas/authSchemas.ts`
+- Refactored product, variant, and delivery CRUD flows into layers:
+  - Products:
+    - `backend/src/routes/products.ts` (thin router)
+    - `backend/src/controllers/productController.ts`
+    - `backend/src/services/productService.ts`
+    - `backend/src/models/product.ts`
+    - `backend/src/schemas/productSchemas.ts`
+  - Variants:
+    - `backend/src/routes/variants.ts` (thin router)
+    - `backend/src/controllers/variantController.ts`
+    - `backend/src/services/variantService.ts`
+    - `backend/src/models/variant.ts`
+    - `backend/src/schemas/variantSchemas.ts`
+  - Delivery zones:
+    - `backend/src/routes/delivery.ts` (thin router)
+    - `backend/src/controllers/deliveryController.ts`
+    - `backend/src/services/deliveryService.ts`
+    - `backend/src/models/delivery.ts`
+    - `backend/src/schemas/deliverySchemas.ts`
+- Extracted product, variant, and delivery SQL into repository/query modules:
+  - `backend/src/repositories/productRepository.ts`
+  - `backend/src/repositories/variantRepository.ts`
+  - `backend/src/repositories/deliveryRepository.ts`
+  - `backend/src/services/productService.ts` now orchestrates repository calls
+  - `backend/src/services/variantService.ts` now orchestrates repository calls
+  - `backend/src/services/deliveryService.ts` now orchestrates repository calls
+- Extended repository/query extraction to remaining DB-heavy domains:
+  - Auth/user persistence:
+    - `backend/src/repositories/authRepository.ts`
+    - `backend/src/services/authService.ts` now orchestrates repository calls
+  - Auth/session persistence:
+    - `backend/src/repositories/authSessionRepository.ts`
+    - `backend/src/utils/authSession.ts` now delegates refresh-token persistence queries
+  - Payment/transaction persistence:
+    - `backend/src/repositories/paymentRepository.ts`
+    - `backend/src/services/paymentService.ts` now orchestrates repository calls
+  - Admin analytics queries:
+    - `backend/src/admin/repositories/analyticsRepository.ts`
+    - `backend/src/admin/services/analyticsService.ts` now orchestrates repository calls
+- Added remaining shared backend domain model files:
+  - `backend/src/models/user.ts`
+  - `backend/src/models/subscription.ts`
+  - `backend/src/models/transaction.ts`
+- Frontend API client split into domain modules with compatibility facade:
+  - `web/src/services/api/client.ts`
+  - `web/src/services/api/authApi.ts`
+  - `web/src/services/api/aiApi.ts`
+  - `web/src/services/api/productApi.ts`
+  - `web/src/services/api/deliveryApi.ts`
+  - `web/src/services/api/paymentApi.ts`
+  - `web/src/services/api/types.ts`
+  - `web/src/services/api/index.ts`
+  - `web/src/services/api.ts` (compatibility barrel for existing imports)
+- Frontend low-risk migration to domain APIs completed for core seller screens:
+  - `web/src/context/AuthContext.tsx`
+  - `web/src/pages/ForgotPassword.tsx`
+  - `web/src/pages/Products.tsx`
+  - `web/src/pages/DeliveryZones.tsx`
+  - `web/src/pages/Upgrade.tsx`
+  - `web/src/pages/PaymentSuccess.tsx`
+  - `web/src/pages/Dashboard.tsx`
+- Seller dashboard decomposition completed (container + presentational split):
+  - `web/src/pages/dashboard/DashboardContentHeader.tsx`
+  - `web/src/pages/dashboard/DashboardProfilePanel.tsx`
+  - `web/src/pages/dashboard/DashboardReplyTab.tsx`
+  - `web/src/pages/dashboard/DashboardSidebar.tsx`
+  - `web/src/pages/dashboard/dashboardConfig.ts`
+  - `web/src/pages/dashboard/clipboard.ts`
+  - `web/src/pages/dashboard/PaywallModal.tsx`
+  - `web/src/pages/Dashboard.tsx` updated to consume extracted modules
+- Admin dashboard decomposition completed (container + presentational split):
+  - `web/src/admin/components/dashboard/AdminCommandHeader.tsx`
+  - `web/src/admin/components/dashboard/AdminOperationsSidebar.tsx`
+  - `web/src/admin/components/dashboard/TrendPanelChart.tsx`
+  - `web/src/admin/components/dashboard/AdminRecentTransactionsPanel.tsx`
+  - `web/src/admin/components/dashboard/AdminAIHealthPanel.tsx`
+  - `web/src/admin/pages/Dashboard.tsx` updated to consume extracted modules
+
+## Optional next hardening
+- Add focused repository/service unit tests for payment verification and auth-session rotation edge cases.
+
+## Rules for future changes
+- New endpoint implementation should follow:
+  - `route` for HTTP wiring only
+  - `controller` for request/response orchestration
+  - `service` for business logic + DB calls
+  - `schema` for payload validation/parsing
+  - `model` for shared domain types/constants
+- Avoid adding new business logic directly into `routes/*.ts`.

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { api, DeliveryZone } from '../services/api'
+import { deliveryApi } from '../services/api/deliveryApi'
+import type { DeliveryZone } from '../services/api/types'
 import { useUIFeedback } from '../context/UIFeedbackContext'
 import AppAlert from '../components/ui/AppAlert'
 import AppButton from '../components/ui/AppButton'
@@ -29,9 +30,16 @@ export default function DeliveryZones({ initialData = null, onDataChange }: Deli
   const [editCod, setEditCod] = useState(true)
 
   useEffect(() => {
+    if (initialData === null) {
+      return
+    }
+
+    setZones(initialData)
+    setLoading(false)
+  }, [initialData])
+
+  useEffect(() => {
     if (initialData !== null) {
-      setZones(initialData)
-      setLoading(false)
       return
     }
 
@@ -44,7 +52,7 @@ export default function DeliveryZones({ initialData = null, onDataChange }: Deli
     }
     setError('')
     try {
-      const zonesData = await api.getDeliveryZones()
+      const zonesData = await deliveryApi.getDeliveryZones()
       setZones(zonesData)
       onDataChange?.(zonesData)
     } catch (err) {
@@ -61,7 +69,7 @@ export default function DeliveryZones({ initialData = null, onDataChange }: Deli
 
     setAddingZone(true)
     try {
-      const zone = await api.createDeliveryZone(
+      const zone = await deliveryApi.createDeliveryZone(
         newZoneName.trim(),
         parseFloat(newZonePrice),
         newZoneCod
@@ -94,7 +102,7 @@ export default function DeliveryZones({ initialData = null, onDataChange }: Deli
     if (!editingZone || !editName.trim() || !editPrice) return
 
     try {
-      const updated = await api.updateDeliveryZone(
+      const updated = await deliveryApi.updateDeliveryZone(
         editingZone.id,
         editName.trim(),
         parseFloat(editPrice),
@@ -116,7 +124,7 @@ export default function DeliveryZones({ initialData = null, onDataChange }: Deli
     if (!confirm('Delete this delivery zone?')) return
 
     try {
-      await api.deleteDeliveryZone(id)
+      await deliveryApi.deleteDeliveryZone(id)
       const nextZones = zones.filter(z => z.id !== id)
       setZones(nextZones)
       onDataChange?.(nextZones)

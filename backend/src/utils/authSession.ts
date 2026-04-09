@@ -2,6 +2,14 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import type { Request, Response } from "express";
 import pool from "./db.js";
+import {
+  insertRefreshSession,
+  insertRefreshSessionWithClient,
+  markRefreshSessionRevokedWithReplacement,
+  revokeAdminRefreshSessions,
+  revokeRefreshSessionByTokenHash,
+  selectActiveRefreshSessionForUpdate,
+} from "../repositories/authSessionRepository.js";
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
@@ -225,25 +233,19 @@ export async function createRefreshSession(
     ? params.userAgent.join("; ")
     : params.userAgent;
 
-  const result = await pool.query(
-    `INSERT INTO auth_refresh_tokens
-      (user_id, admin_id, token_hash, token_type, expires_at, created_ip, user_agent)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING id`,
-    [
-      params.userId ?? null,
-      params.adminId ?? null,
-      tokenHash,
-      params.tokenType,
-      expiresAt,
-      params.ipAddress ?? null,
-      normalizedUserAgent ?? null,
-    ]
-  );
+  const created = await insertRefreshSession({
+    userId: params.userId ?? null,
+    adminId: params.adminId ?? null,
+    tokenHash,
+    tokenType: params.tokenType,
+    expiresAt,
+    ipAddress: params.ipAddress ?? null,
+    userAgent: normalizedUserAgent ?? null,
+  });
 
   return {
     token,
-    sessionId: result.rows[0].id,
+    sessionId: created.id,
   };
 }
 
@@ -257,27 +259,16 @@ export async function rotateRefreshSession(
 
     const currentTokenHash = hashToken(params.currentToken);
 
-    const currentResult = await client.query(
-      `SELECT id, user_id, admin_id
-       FROM auth_refresh_tokens
-       WHERE token_hash = $1
-         AND token_type = $2
-         AND revoked_at IS NULL
-         AND expires_at > NOW()
-       FOR UPDATE`,
-      [currentTokenHash, params.tokenType]
+    const current = await selectActiveRefreshSessionForUpdate(
+      client,
+      currentTokenHash,
+      params.tokenType
     );
 
-    if (currentResult.rows.length === 0) {
+    if (!current) {
       await client.query("ROLLBACK");
       return null;
     }
-
-    const current = currentResult.rows[0] as {
-      id: number;
-      user_id: number | null;
-      admin_id: number | null;
-    };
 
     const newToken = randomToken();
     const newTokenHash = hashToken(newToken);
@@ -286,28 +277,17 @@ export async function rotateRefreshSession(
       ? params.userAgent.join("; ")
       : params.userAgent;
 
-    const insertResult = await client.query(
-      `INSERT INTO auth_refresh_tokens
-        (user_id, admin_id, token_hash, token_type, expires_at, created_ip, user_agent)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id`,
-      [
-        current.user_id,
-        current.admin_id,
-        newTokenHash,
-        params.tokenType,
-        newExpiresAt,
-        params.ipAddress ?? null,
-        normalizedUserAgent ?? null,
-      ]
-    );
+    const inserted = await insertRefreshSessionWithClient(client, {
+      userId: current.user_id,
+      adminId: current.admin_id,
+      tokenHash: newTokenHash,
+      tokenType: params.tokenType,
+      expiresAt: newExpiresAt,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: normalizedUserAgent ?? null,
+    });
 
-    await client.query(
-      `UPDATE auth_refresh_tokens
-       SET revoked_at = NOW(), replaced_by_id = $2
-       WHERE id = $1`,
-      [current.id, insertResult.rows[0].id]
-    );
+    await markRefreshSessionRevokedWithReplacement(client, current.id, inserted.id);
 
     await client.query("COMMIT");
 
@@ -333,26 +313,11 @@ export async function revokeRefreshSession(
   tokenType: SessionType
 ): Promise<void> {
   const tokenHash = hashToken(rawToken);
-
-  await pool.query(
-    `UPDATE auth_refresh_tokens
-     SET revoked_at = NOW()
-     WHERE token_hash = $1
-       AND token_type = $2
-       AND revoked_at IS NULL`,
-    [tokenHash, tokenType]
-  );
+  await revokeRefreshSessionByTokenHash(tokenHash, tokenType);
 }
 
 export async function revokeAllRefreshSessionsForAdmin(
   adminId: number
 ): Promise<void> {
-  await pool.query(
-    `UPDATE auth_refresh_tokens
-     SET revoked_at = NOW()
-     WHERE admin_id = $1
-       AND token_type = 'admin'
-       AND revoked_at IS NULL`,
-    [adminId]
-  );
+  await revokeAdminRefreshSessions(adminId);
 }

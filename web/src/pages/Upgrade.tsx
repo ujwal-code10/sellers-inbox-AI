@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import { api, type PlanResponse, type ManualQrConfigResponse, type BillingCycle, type ManualQrStatusResponse } from '../services/api'
+import { paymentApi } from '../services/api/paymentApi'
+import type {
+  BillingCycle,
+  ManualQrConfigResponse,
+  ManualQrStatusResponse,
+  PlanResponse,
+} from '../services/api/types'
 
 interface UpgradeProps {
   initialPlanData?: PlanResponse | null
@@ -70,9 +76,9 @@ export default function Upgrade({
     setErrorMessage('')
     try {
       const [data, config, manualStatus] = await Promise.all([
-        api.getPlans(),
-        api.getManualQrConfig(),
-        api.getManualQrStatus(),
+        paymentApi.getPlans(),
+        paymentApi.getManualQrConfig(),
+        paymentApi.getManualQrStatus(),
       ])
 
       setPlanData(data)
@@ -114,7 +120,7 @@ export default function Upgrade({
     setSubmittingQr(true)
     setErrorMessage('')
     try {
-      const result = await api.submitManualQrPayment({
+      const result = await paymentApi.submitManualQrPayment({
         billing: selectedBilling,
         paymentReference: reference,
         payerName: payer,
@@ -128,7 +134,7 @@ export default function Upgrade({
       })
 
       try {
-        const manualStatus = await api.getManualQrStatus()
+        const manualStatus = await paymentApi.getManualQrStatus()
         setPendingManualRequest(manualStatus.pending ? manualStatus.request || null : null)
       } catch {
         setPendingManualRequest({

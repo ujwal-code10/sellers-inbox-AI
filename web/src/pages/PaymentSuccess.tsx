@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { api } from '../services/api'
+import { paymentApi } from '../services/api/paymentApi'
 
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams()
@@ -17,7 +17,7 @@ export default function PaymentSuccess() {
       return
     }
 
-    api.verifyEsewa(encodedData, billingHint).then(() => {
+    paymentApi.verifyEsewa(encodedData, billingHint).then(() => {
       localStorage.removeItem('esewa_billing')
       setStatus('success')
       redirectTimer = setTimeout(() => {

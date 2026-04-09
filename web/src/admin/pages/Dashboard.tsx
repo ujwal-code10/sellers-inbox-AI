@@ -1,7 +1,12 @@
-import { CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { CSSProperties, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AdminLayout } from '../components/layout/AdminLayout';
+import AdminAIHealthPanel from '../components/dashboard/AdminAIHealthPanel';
 import { adminApi, DashboardData, Transaction } from '../services/adminApi';
+import AdminCommandHeader from '../components/dashboard/AdminCommandHeader';
+import AdminOperationsSidebar from '../components/dashboard/AdminOperationsSidebar';
+import AdminRecentTransactionsPanel from '../components/dashboard/AdminRecentTransactionsPanel';
+import TrendPanelChart from '../components/dashboard/TrendPanelChart';
 import { MetricCard, SectionHeader, Sparkline } from '../components/ui';
 import '../styles/admin.css';
 
@@ -47,21 +52,6 @@ function normalizeTrend(values: number[]): number[] {
     return [0, 0, 0, 0, 0, 0, 0];
   }
   return values;
-}
-
-function normalizeSeries(values: number[]): number[] {
-  if (!values.length) {
-    return [];
-  }
-
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-
-  if (min === max) {
-    return values.map(() => 0.5);
-  }
-
-  return values.map((value) => (value - min) / (max - min));
 }
 
 function toPositiveNumber(value: unknown, fallback: number = 0): number {
@@ -134,51 +124,6 @@ function formatTrendDateLabel(value?: string): string {
   });
 }
 
-function formatTimestamp(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '--';
-  }
-
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function formatRelativeTimestamp(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '--';
-  }
-
-  const now = Date.now();
-  const diffMs = now - date.getTime();
-
-  if (diffMs < 30 * 1000) {
-    return 'Just now';
-  }
-
-  const minutes = Math.floor(diffMs / (60 * 1000));
-  if (minutes < 60) {
-    return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
-  }
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    return `${hours} hour${hours === 1 ? '' : 's'} ago`;
-  }
-
-  const days = Math.floor(hours / 24);
-  if (days < 7) {
-    return `${days} day${days === 1 ? '' : 's'} ago`;
-  }
-
-  return formatTimestamp(value);
-}
-
 function normalizeAiSnapshot(
   aiUsageStats: any,
   fallbackTotal: number,
@@ -211,20 +156,6 @@ function normalizeAiSnapshot(
   return { total, success, failed, rate };
 }
 
-function transactionStatusBadge(status: string): string {
-  switch (status) {
-    case 'completed':
-      return 'admin-badge-success';
-    case 'pending':
-      return 'admin-badge-warning';
-    case 'failed':
-    case 'rejected':
-      return 'admin-badge-error';
-    default:
-      return 'admin-badge-neutral';
-  }
-}
-
 function paymentMethodLabel(method?: string): string {
   if (!method) {
     return '--';
@@ -243,243 +174,6 @@ function compareText(a: string, b: string, direction: 'asc' | 'desc') {
 
 function compareNumber(a: number, b: number, direction: 'asc' | 'desc') {
   return direction === 'asc' ? a - b : b - a;
-}
-
-function toSmoothPath(points: ChartPoint[]): string {
-  if (!points.length) {
-    return '';
-  }
-
-  if (points.length === 1) {
-    const point = points[0];
-    return `M${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
-  }
-
-  let path = `M${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
-
-  for (let i = 0; i < points.length - 1; i += 1) {
-    const p0 = points[i - 1] || points[i];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[i + 2] || p2;
-
-    const cp1x = p1.x + (p2.x - p0.x) / 6;
-    const cp1y = p1.y + (p2.y - p0.y) / 6;
-    const cp2x = p2.x - (p3.x - p1.x) / 6;
-    const cp2y = p2.y - (p3.y - p1.y) / 6;
-
-    path += ` C${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
-  }
-
-  return path;
-}
-
-interface TrendPanelChartProps {
-  chartId: string;
-  revenue: number[];
-  volume: number[];
-  labels: string[];
-}
-
-interface ChartPoint {
-  x: number;
-  y: number;
-  value: number;
-}
-
-function TrendPanelChart({ chartId, revenue, volume, labels }: TrendPanelChartProps) {
-  const frameRef = useRef<HTMLDivElement | null>(null);
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-
-  const pointCount = Math.max(revenue.length, volume.length);
-
-  if (!pointCount) {
-    return <div className="admin-trend-chart-empty">No trend data available yet</div>;
-  }
-
-  const revenueValues = Array.from({ length: pointCount }, (_, index) => Number(revenue[index] || 0));
-  const volumeValues = Array.from({ length: pointCount }, (_, index) => Number(volume[index] || 0));
-
-  const normalizedRevenue = normalizeSeries(revenueValues);
-  const normalizedVolume = normalizeSeries(volumeValues);
-  const maxIndex = Math.max(pointCount - 1, 1);
-  const chartTop = 10;
-  const chartBottom = 92;
-  const chartHeight = chartBottom - chartTop;
-  const volumeBarWidth = Math.max(2.2, Math.min(7, 72 / Math.max(pointCount, 1)));
-
-  const revenuePoints: ChartPoint[] = normalizedRevenue.map((point, index) => ({
-    x: (index / maxIndex) * 100,
-    y: chartBottom - point * (chartHeight - 6),
-    value: revenueValues[index],
-  }));
-
-  const volumeBars = normalizedVolume.map((point, index) => {
-    const centerX = (index / maxIndex) * 100;
-    const y = chartBottom - point * (chartHeight - 8);
-    const height = Math.max(1.4, chartBottom - y);
-
-    return {
-      x: Math.max(0.7, centerX - volumeBarWidth / 2),
-      y,
-      width: volumeBarWidth,
-      height,
-      centerX,
-      value: volumeValues[index],
-    };
-  });
-
-  const revenuePath = toSmoothPath(revenuePoints);
-
-  const revenueStartX = revenuePoints[0]?.x ?? 0;
-  const revenueEndX = revenuePoints[revenuePoints.length - 1]?.x ?? 100;
-  const areaPath = revenuePath
-    ? `${revenuePath} L${revenueEndX.toFixed(2)} 95 L${revenueStartX.toFixed(2)} 95 Z`
-    : '';
-
-  let revenueLength = 0;
-  for (let index = 1; index < revenuePoints.length; index += 1) {
-    const dx = revenuePoints[index].x - revenuePoints[index - 1].x;
-    const dy = revenuePoints[index].y - revenuePoints[index - 1].y;
-    revenueLength += Math.sqrt(dx * dx + dy * dy);
-  }
-
-  const activeIndex = hoveredIndex ?? pointCount - 1;
-  const tooltipLabel = labels[activeIndex] || `Point ${activeIndex + 1}`;
-  const axisIndexes = Array.from(new Set([0, Math.floor((pointCount - 1) / 2), pointCount - 1]));
-  const activeRevenuePoint = revenuePoints[activeIndex] ?? revenuePoints[revenuePoints.length - 1];
-  const activeVolumeBar = volumeBars[activeIndex] ?? volumeBars[volumeBars.length - 1];
-  const guideX = activeRevenuePoint?.x ?? activeVolumeBar?.centerX ?? 0;
-  const revenuePeak = Math.max(...revenueValues);
-  const revenueAverage =
-    revenueValues.reduce((sum, value) => sum + value, 0) / Math.max(revenueValues.length, 1);
-  const volumeAverage =
-    volumeValues.reduce((sum, value) => sum + value, 0) / Math.max(volumeValues.length, 1);
-
-  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!frameRef.current || pointCount <= 1) {
-      return;
-    }
-
-    const rect = frameRef.current.getBoundingClientRect();
-    const ratio = (event.clientX - rect.left) / rect.width;
-    const nextIndex = Math.min(pointCount - 1, Math.max(0, Math.round(ratio * (pointCount - 1))));
-
-    setHoveredIndex(nextIndex);
-  };
-
-  const desiredTooltipPercent = pointCount === 1 ? 50 : (activeIndex / (pointCount - 1)) * 100;
-  const frameWidth = frameRef.current?.clientWidth ?? 0;
-  const tooltipHalfWidth = 92;
-  const tooltipPadding = 8;
-
-  let clampedTooltipPercent = desiredTooltipPercent;
-  if (frameWidth > 0) {
-    const desiredPx = (desiredTooltipPercent / 100) * frameWidth;
-    const minPx = tooltipHalfWidth + tooltipPadding;
-    const maxPx = frameWidth - tooltipHalfWidth - tooltipPadding;
-    const clampedPx = Math.max(minPx, Math.min(maxPx, desiredPx));
-    clampedTooltipPercent = (clampedPx / frameWidth) * 100;
-  }
-
-  const tooltipStyle: CSSProperties = {
-    left: `${clampedTooltipPercent}%`,
-  };
-
-  return (
-    <div className="admin-trend-chart-shell">
-      <div
-        className="admin-trend-chart-frame"
-        ref={frameRef}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setHoveredIndex(null)}
-      >
-        <svg
-          id={chartId}
-          className="admin-trend-chart"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          role="img"
-          aria-label="Revenue and transaction trend chart"
-        >
-          <defs>
-            <linearGradient id="admin-trend-revenue-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgba(16, 185, 129, 0.36)" />
-              <stop offset="100%" stopColor="rgba(16, 185, 129, 0.04)" />
-            </linearGradient>
-          </defs>
-
-          <g className="admin-trend-grid">
-            {[20, 35, 50, 65, 80].map((y) => (
-              <line key={`h-${y}`} x1="0" y1={y} x2="100" y2={y} />
-            ))}
-            {Array.from({ length: Math.min(pointCount, 8) }, (_, index) => {
-              const x = (index / Math.max(Math.min(pointCount, 8) - 1, 1)) * 100;
-              return <line key={`v-${x}`} x1={x} y1="8" x2={x} y2="95" />;
-            })}
-          </g>
-
-          <line className="admin-trend-guide-line" x1={guideX} y1="8" x2={guideX} y2="95" />
-
-          {areaPath ? <path className="admin-trend-area" d={areaPath} fill="url(#admin-trend-revenue-fill)" /> : null}
-
-          {volumeBars.map((bar, index) => (
-            <rect
-              key={`bar-${index}`}
-              className={`admin-trend-bar ${activeIndex === index ? 'active' : ''}`}
-              x={bar.x}
-              y={bar.y}
-              width={bar.width}
-              height={bar.height}
-              rx="1.2"
-              ry="1.2"
-            />
-          ))}
-
-          {revenuePath ? (
-            <path
-              className="admin-trend-path admin-trend-path-revenue"
-              d={revenuePath}
-              style={{
-                strokeDasharray: revenueLength || undefined,
-                strokeDashoffset: revenueLength || undefined,
-              }}
-            />
-          ) : null}
-
-          {revenuePoints.map((point, index) => (
-            <circle
-              key={`revenue-${index}`}
-              className={`admin-trend-point admin-trend-point-revenue ${activeIndex === index ? 'active' : ''}`}
-              cx={point.x}
-              cy={point.y}
-              r={activeIndex === index ? 2.1 : 1.5}
-            />
-          ))}
-        </svg>
-
-        <div className={`admin-trend-tooltip ${hoveredIndex !== null ? 'visible' : ''}`} style={tooltipStyle}>
-          <div className="admin-trend-tooltip-label">{tooltipLabel}</div>
-          <div className="admin-trend-tooltip-row">Revenue: {formatCurrency(revenueValues[activeIndex] || 0)}</div>
-          <div className="admin-trend-tooltip-row">Transactions: {Math.round(volumeValues[activeIndex] || 0)}</div>
-        </div>
-      </div>
-
-      <div className="admin-trend-axis" aria-hidden="true">
-        {axisIndexes.map((index) => (
-          <span key={`axis-${index}`} className="admin-trend-axis-label">
-            {labels[index] || `Point ${index + 1}`}
-          </span>
-        ))}
-      </div>
-
-      <div className="admin-trend-insights" aria-hidden="true">
-        <span>Peak Revenue: {formatCurrency(revenuePeak)}</span>
-        <span>Avg Revenue: {formatCurrency(revenueAverage)}</span>
-        <span>Avg Txn: {Math.round(volumeAverage).toLocaleString()}</span>
-      </div>
-    </div>
-  );
 }
 
 export function Dashboard() {
@@ -882,38 +576,12 @@ export function Dashboard() {
 
   return (
     <AdminLayout>
-      <div className="admin-command-header">
-        <div className="admin-command-header-row">
-          <div>
-            <p className="admin-command-eyebrow">Admin Operations</p>
-            <h1 className="admin-command-title">Command Center</h1>
-            <p className="admin-command-meta">Last updated {lastUpdatedLabel}</p>
-          </div>
-
-          <div className="admin-command-header-actions">
-            <Link to="/admin/transactions" className="admin-btn admin-btn-secondary admin-btn-sm">
-              Open Transactions
-            </Link>
-            <button
-              type="button"
-              className="admin-btn admin-btn-primary admin-btn-sm"
-              onClick={() => loadDashboard(trendRange, true)}
-              disabled={isRefreshing}
-            >
-              {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
-            </button>
-          </div>
-        </div>
-
-        <div className="admin-command-strip" role="status" aria-live="polite">
-          <span className={`admin-command-pulse ${actionQueue > 0 ? 'alert' : 'ok'}`} aria-hidden="true" />
-          <span>
-            {actionQueue > 0
-              ? `${actionQueue} items require immediate attention across payments, renewals, or AI performance.`
-              : 'All systems operational • No critical issues'}
-          </span>
-        </div>
-      </div>
+      <AdminCommandHeader
+        actionQueue={actionQueue}
+        isRefreshing={isRefreshing}
+        lastUpdatedLabel={lastUpdatedLabel}
+        onRefresh={() => loadDashboard(trendRange, true)}
+      />
 
       {error ? (
         <div className="admin-inline-error">
@@ -1045,254 +713,37 @@ export function Dashboard() {
           </div>
         </section>
 
-        <div className="admin-command-side-stack">
-          <section className="admin-attention-panel">
-            <SectionHeader
-              title="Action Required"
-              subtitle="Items requiring immediate attention"
-              actions={(
-                <button
-                  type="button"
-                  className="admin-btn admin-btn-secondary admin-btn-sm"
-                  onClick={() => setAttentionExpanded((previous) => !previous)}
-                >
-                  {attentionExpanded ? 'Collapse' : 'Expand'}
-                </button>
-              )}
-            />
-
-            {isAllClear && !attentionExpanded ? (
-              <div className="admin-all-clear-banner" role="status" aria-live="polite">
-                <span className="admin-all-clear-icon" aria-hidden="true">✓</span>
-                <span>All Clear! No action items at this time.</span>
-              </div>
-            ) : (
-              <>
-                {isAllClear ? (
-                  <div className="admin-all-clear-inline">
-                    <span className="admin-all-clear-icon" aria-hidden="true">✓</span>
-                    <span>All systems operational • No critical issues</span>
-                  </div>
-                ) : null}
-
-                {attentionExpanded ? (
-                  <div className="admin-attention-grid">
-                    <div className="admin-attention-item warning">
-                      <div className="admin-attention-label">Manual Approvals Pending</div>
-                      <div key={`pending-${pulseSeed}`} className="admin-attention-value admin-count-bounce">
-                        {attention.pendingApprovals}
-                      </div>
-                      <div className="admin-attention-meta">Payment Verification Required</div>
-                    </div>
-                    <div className="admin-attention-item info">
-                      <div className="admin-attention-label">Pro Plans Expiring Soon</div>
-                      <div key={`expiring-${pulseSeed}`} className="admin-attention-value admin-count-bounce">
-                        {attention.expiringSoon}
-                      </div>
-                      <div className="admin-attention-meta">Renewal Follow-Up Required</div>
-                    </div>
-                    <div className={`admin-attention-item ${attention.failedToday > 0 ? 'critical' : 'info'}`}>
-                      <div className="admin-attention-label">Failed AI Requests</div>
-                      <div key={`failed-${pulseSeed}`} className="admin-attention-value admin-count-bounce">
-                        {attention.failedToday}
-                      </div>
-                      <div className="admin-attention-meta">Monitor for Service Anomalies</div>
-                    </div>
-                  </div>
-                ) : null}
-              </>
-            )}
-          </section>
-
-          <aside className="admin-quick-actions">
-            <SectionHeader title="Common Tasks" subtitle="Frequently used actions" />
-            <div className="admin-quick-actions-list">
-              {[
-                {
-                  to: '/admin/transactions?status=pending',
-                  label: 'Review Pending Transactions',
-                  value: attention.pendingApprovals,
-                },
-                {
-                  to: '/admin/subscriptions',
-                  label: 'Review Expiring Subscriptions',
-                  value: attention.expiringSoon,
-                },
-                {
-                  to: '/admin/ai-usage',
-                  label: 'View AI Performance Logs',
-                  value: attention.failedToday,
-                },
-                {
-                  to: '/admin/users',
-                  label: 'Manage User Accounts',
-                  value: data.users.total,
-                },
-              ].map((action, index) => (
-                <Link
-                  key={action.label}
-                  to={action.to}
-                  className="admin-quick-action-link"
-                  style={{ animationDelay: `${index * 50}ms` }}
-                >
-                  <span className="admin-quick-action-label">
-                    <span>{action.label}</span>
-                    <span className="admin-quick-action-arrow" aria-hidden="true">→</span>
-                  </span>
-                  <strong key={`${action.label}-${pulseSeed}`} className="admin-quick-action-count">
-                    {formatNumber(action.value)}
-                  </strong>
-                </Link>
-              ))}
-            </div>
-          </aside>
-        </div>
+        <AdminOperationsSidebar
+          attention={attention}
+          isAllClear={isAllClear}
+          attentionExpanded={attentionExpanded}
+          pulseSeed={pulseSeed}
+          totalUsers={data.users.total}
+          onToggleExpanded={() => setAttentionExpanded((previous) => !previous)}
+        />
       </div>
 
       <div className="admin-command-bottom-grid">
-        <section className="admin-command-transactions">
-          <SectionHeader
-            title="Recent Transactions"
-            subtitle="Latest payment events across all methods"
-            actions={(
-              <Link to="/admin/transactions" className="admin-btn admin-btn-secondary admin-btn-sm">
-                View all
-              </Link>
-            )}
-          />
+        <AdminRecentTransactionsPanel
+          transactions={sortedRecentTransactions}
+          onSort={handleSort}
+          getSortIndicator={getSortIndicator}
+          onOpenTransaction={(id) => navigate(`/admin/transactions?focus=${id}`)}
+        />
 
-          {sortedRecentTransactions.length > 0 ? (
-            <div className="admin-command-table-wrapper">
-              <table className="admin-command-table">
-                <thead>
-                  <tr>
-                    <th>
-                      <button type="button" className="admin-command-table-sort-btn" onClick={() => handleSort('user')}>
-                        User {getSortIndicator('user')}
-                      </button>
-                    </th>
-                    <th>
-                      <button type="button" className="admin-command-table-sort-btn" onClick={() => handleSort('amount')}>
-                        Amount {getSortIndicator('amount')}
-                      </button>
-                    </th>
-                    <th>
-                      <button type="button" className="admin-command-table-sort-btn" onClick={() => handleSort('method')}>
-                        Method {getSortIndicator('method')}
-                      </button>
-                    </th>
-                    <th>
-                      <button type="button" className="admin-command-table-sort-btn" onClick={() => handleSort('status')}>
-                        Status {getSortIndicator('status')}
-                      </button>
-                    </th>
-                    <th>
-                      <button type="button" className="admin-command-table-sort-btn" onClick={() => handleSort('created')}>
-                        Created {getSortIndicator('created')}
-                      </button>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedRecentTransactions.map((transaction) => (
-                    <tr
-                      key={transaction.id}
-                      className="admin-command-table-row-clickable"
-                      onClick={() => navigate(`/admin/transactions?focus=${transaction.id}`)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          navigate(`/admin/transactions?focus=${transaction.id}`);
-                        }
-                      }}
-                      tabIndex={0}
-                      role="button"
-                      aria-label={`Open transaction ${transaction.id}`}
-                    >
-                      <td>
-                        <div className="admin-command-table-title">
-                          {transaction.user_name || transaction.user_email || `User #${transaction.user_id ?? '--'}`}
-                        </div>
-                        <div className="admin-command-table-subtitle">{transaction.type}</div>
-                      </td>
-                      <td>{formatCurrency(Number(transaction.amount) || 0)}</td>
-                      <td>{paymentMethodLabel(transaction.payment_method)}</td>
-                      <td>
-                        <span className={`admin-badge ${transactionStatusBadge(transaction.status)}`}>
-                          {transaction.status}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="admin-command-table-title">{formatRelativeTimestamp(transaction.created_at)}</div>
-                        <div className="admin-command-table-subtitle">{formatTimestamp(transaction.created_at)}</div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="admin-empty-state">
-              <h3 className="admin-empty-state-title">No transactions yet today</h3>
-              <p className="admin-empty-state-description">New payment activity will appear here as it comes in.</p>
-            </div>
-          )}
-        </section>
-
-        <section className="admin-command-health-card">
-          <SectionHeader title="AI Performance Monitor" subtitle="Real-time performance metrics" />
-
-          <div className="admin-health-score-row">
-            <div className="admin-health-score">
-              <div className="admin-health-score-value">{aiSuccessRateLabel}</div>
-              <div className="admin-health-score-label">Requests Processed Successfully</div>
-            </div>
-
-            <div className="admin-health-meter">
-              <div className="admin-health-meter-track">
-                <div className={`admin-health-meter-fill ${aiTrendStatus}`} style={aiHealthBarStyle} />
-              </div>
-              <div className="admin-health-meter-caption">
-                {aiSnapshot.total > 0
-                  ? `${aiSuccessRateLabel} • ${aiSnapshot.success}/${aiSnapshot.total} requests succeeded today`
-                  : 'No AI requests processed today yet'}
-              </div>
-            </div>
-          </div>
-
-          <div className="admin-health-grid">
-            <div className="admin-health-cell">
-              <span>Failed Requests</span>
-              <strong>{aiSnapshot.failed}</strong>
-            </div>
-            <div className="admin-health-cell">
-              <span>Average Response Time</span>
-              <strong>{Math.round(aiLatency)} ms</strong>
-            </div>
-            <div className="admin-health-cell">
-              <span>7-Day Average</span>
-              <strong>{formatNumber(aiLast7Days)}</strong>
-            </div>
-            <div className="admin-health-cell">
-              <span>30-Day Average</span>
-              <strong>{formatNumber(aiLast30Days)}</strong>
-            </div>
-            <div className="admin-health-cell">
-              <span>AI Request Trend</span>
-              <strong>{formatDeltaCopy(aiDelta, 'vs previous day')}</strong>
-            </div>
-            <div className="admin-health-cell">
-              <span>Status</span>
-              <strong>
-                {aiRequestTrendTone === 'positive'
-                  ? 'Stable'
-                  : aiRequestTrendTone === 'negative'
-                    ? 'Needs attention'
-                    : 'Monitoring'}
-              </strong>
-            </div>
-          </div>
-        </section>
+        <AdminAIHealthPanel
+          aiSuccessRateLabel={aiSuccessRateLabel}
+          aiSnapshotTotal={aiSnapshot.total}
+          aiSnapshotSuccess={aiSnapshot.success}
+          aiSnapshotFailed={aiSnapshot.failed}
+          aiLatency={aiLatency}
+          aiLast7Days={aiLast7Days}
+          aiLast30Days={aiLast30Days}
+          aiDeltaLabel={formatDeltaCopy(aiDelta, 'vs previous day')}
+          aiRequestTrendTone={aiRequestTrendTone}
+          aiTrendStatus={aiTrendStatus}
+          aiHealthBarStyle={aiHealthBarStyle}
+        />
       </div>
     </AdminLayout>
   );

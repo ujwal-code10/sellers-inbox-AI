@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Mail01 } from '@untitledui/icons'
-import { api } from '../services/api'
+import { authApi } from '../services/api/authApi'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
@@ -16,7 +16,7 @@ export default function ForgotPassword() {
     setLoading(true)
 
     try {
-      const response = await api.requestPasswordReset(email)
+      const response = await authApi.requestPasswordReset(email)
       setSuccessMessage(response.message)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not process request')

@@ -26,12 +26,29 @@ const colors = {
   bold: "\x1b[1m",
 };
 
+const VERBOSE_STARTUP_LOGS =
+  process.env.NODE_ENV !== "production" ||
+  process.env.ENABLE_STARTUP_VERBOSE_LOGS === "true";
+
 function log(message: string, color: keyof typeof colors = "reset") {
+  if (!VERBOSE_STARTUP_LOGS && color !== "yellow" && color !== "red") {
+    return;
+  }
+
+  if (!VERBOSE_STARTUP_LOGS) {
+    console.log(message);
+    return;
+  }
+
   const timestamp = new Date().toISOString().substring(11, 19);
   console.log(`${colors.dim}[${timestamp}]${colors.reset} ${colors[color]}${message}${colors.reset}`);
 }
 
 function logHeader(message: string) {
+  if (!VERBOSE_STARTUP_LOGS) {
+    return;
+  }
+
   console.log(`\n${colors.bold}${colors.blue}${"=".repeat(50)}${colors.reset}`);
   console.log(`${colors.bold}${colors.blue}  ${message}${colors.reset}`);
   console.log(`${colors.bold}${colors.blue}${"=".repeat(50)}${colors.reset}\n`);

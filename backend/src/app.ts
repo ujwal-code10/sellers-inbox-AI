@@ -3,6 +3,9 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
+import { installProductionConsoleSafety } from "./utils/logger.js";
+
+installProductionConsoleSafety();
 
 // Validate required environment variables at startup
 const requiredEnvVars = ["JWT_SECRET", "ADMIN_JWT_SECRET", "GROQ_API_KEY", "DATABASE_URL"];
@@ -26,8 +29,18 @@ if (process.env.ADMIN_JWT_SECRET && process.env.ADMIN_JWT_SECRET.length < 32) {
 }
 
 // Warn if eSewa secret is missing (payment will fail but app can start)
-if (!process.env.ESEWA_SECRET_KEY && process.env.NODE_ENV === 'production') {
-  console.warn('WARNING: ESEWA_SECRET_KEY not set. Payments will fail.');
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.ESEWA_SECRET_KEY || !process.env.ESEWA_MERCHANT_CODE) {
+    console.warn('WARNING: ESEWA_SECRET_KEY or ESEWA_MERCHANT_CODE not set. eSewa payments will be disabled.');
+  }
+}
+
+const debugRoutesEnabled =
+  process.env.ENABLE_DEBUG_ROUTES === "true" &&
+  process.env.NODE_ENV !== "production";
+
+if (process.env.ENABLE_DEBUG_ROUTES === "true" && process.env.NODE_ENV === "production") {
+  console.warn("ENABLE_DEBUG_ROUTES is ignored in production.");
 }
 
 import authRoutes from "./routes/auth";
@@ -113,7 +126,7 @@ app.use("/api", aiRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/admin", adminRoutes);
 
-if (process.env.NODE_ENV !== "production") {
+if (debugRoutesEnabled) {
   // Debug endpoint for local development only
   app.get("/api/debug", async (_req, res) => {
     const envStatus = {

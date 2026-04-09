@@ -262,8 +262,21 @@ Neon PostgreSQL  Groq API
 ```
 backend/
 ├── src/
+│   ├── admin/
+│   │   ├── middleware/
+│   │   ├── repositories/
+│   │   │   └── analyticsRepository.ts
+│   │   ├── routes/
+│   │   └── services/
 │   ├── ai/
 │   │   └── systemprompt.ts
+│   ├── controllers/
+│   │   ├── aiController.ts
+│   │   ├── authController.ts
+│   │   ├── deliveryController.ts
+│   │   ├── paymentController.ts
+│   │   ├── productController.ts
+│   │   └── variantController.ts
 │   ├── decision/
 │   │   ├── confidence.ts
 │   │   └── decisionEngine.ts
@@ -277,8 +290,25 @@ backend/
 │   │   ├── add_keywords_notes_to_products.sql
 │   │   ├── add_subscriptions_usage.sql
 │   │   └── drop_delivery_settings.sql
+│   ├── models/
+│   │   ├── ai.ts
+│   │   ├── auth.ts
+│   │   ├── delivery.ts
+│   │   ├── payment.ts
+│   │   ├── product.ts
+│   │   ├── subscription.ts
+│   │   ├── transaction.ts
+│   │   ├── user.ts
+│   │   └── variant.ts
 │   ├── product/
 │   │   └── productResolver.ts
+│   ├── repositories/
+│   │   ├── authRepository.ts
+│   │   ├── authSessionRepository.ts
+│   │   ├── deliveryRepository.ts
+│   │   ├── paymentRepository.ts
+│   │   ├── productRepository.ts
+│   │   └── variantRepository.ts
 │   ├── routes/
 │   │   ├── ai.ts
 │   │   ├── auth.ts
@@ -286,11 +316,29 @@ backend/
 │   │   ├── payment.ts        ← NOTE: no 's' at end
 │   │   ├── products.ts
 │   │   └── variants.ts
+│   ├── schemas/
+│   │   ├── aiSchemas.ts
+│   │   ├── authSchemas.ts
+│   │   ├── deliverySchemas.ts
+│   │   ├── paymentSchemas.ts
+│   │   ├── productSchemas.ts
+│   │   └── variantSchemas.ts
+│   ├── services/
+│   │   ├── aiReplyService.ts
+│   │   ├── aiUsageService.ts
+│   │   ├── authService.ts
+│   │   ├── deliveryService.ts
+│   │   ├── paymentService.ts
+│   │   ├── productService.ts
+│   │   └── variantService.ts
 │   ├── utils/
 │   │   └── db.ts
 │   ├── app.ts
 │   └── server.ts
 ```
+
+Layering direction for new/refactored modules:
+`routes -> controllers -> services -> repositories -> models/schemas`.
 
 ### 5.3 Web Frontend File Structure
 
@@ -299,17 +347,47 @@ web/
 ├── public/
 │   └── landing.html
 ├── src/
+│   ├── admin/
+│   │   ├── components/
+│   │   │   ├── dashboard/
+│   │   │   │   ├── AdminAIHealthPanel.tsx
+│   │   │   │   ├── AdminCommandHeader.tsx
+│   │   │   │   ├── AdminOperationsSidebar.tsx
+│   │   │   │   ├── AdminRecentTransactionsPanel.tsx
+│   │   │   │   └── TrendPanelChart.tsx
+│   │   │   ├── layout/
+│   │   │   └── ui/
+│   │   └── pages/
+│   │       └── Dashboard.tsx
 │   ├── context/
 │   │   └── AuthContext.tsx
 │   ├── pages/
+│   │   ├── dashboard/
+│   │   │   ├── clipboard.ts
+│   │   │   ├── DashboardContentHeader.tsx
+│   │   │   ├── DashboardProfilePanel.tsx
+│   │   │   ├── DashboardReplyTab.tsx
+│   │   │   ├── DashboardSidebar.tsx
+│   │   │   ├── dashboardConfig.ts
+│   │   │   └── PaywallModal.tsx
 │   │   ├── Dashboard.tsx
 │   │   ├── Products.tsx
 │   │   ├── DeliveryZones.tsx
 │   │   ├── Login.tsx
 │   │   ├── Signup.tsx
 │   │   ├── Upgrade.tsx
-│   │   └── PaymentSuccess.tsx
+│   │   ├── PaymentSuccess.tsx
+│   │   └── ForgotPassword.tsx
 │   ├── services/
+│   │   ├── api/
+│   │   │   ├── aiApi.ts
+│   │   │   ├── authApi.ts
+│   │   │   ├── client.ts
+│   │   │   ├── deliveryApi.ts
+│   │   │   ├── index.ts
+│   │   │   ├── paymentApi.ts
+│   │   │   ├── productApi.ts
+│   │   │   └── types.ts
 │   │   └── api.ts
 │   ├── App.tsx
 │   └── main.tsx

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { api, Product, Variant } from '../services/api'
+import { productApi } from '../services/api/productApi'
+import type { Product, Variant } from '../services/api/types'
 import { useUIFeedback } from '../context/UIFeedbackContext'
 import AppAlert from '../components/ui/AppAlert'
 import AppButton from '../components/ui/AppButton'
@@ -67,7 +68,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
     if (missingVariantPayload.length > 0) {
       const variantResults = await Promise.all(
         missingVariantPayload.map(product =>
-          api.getVariants(product.id).then(variants => ({
+          productApi.getVariants(product.id).then(variants => ({
             productId: product.id,
             variants,
           }))
@@ -92,14 +93,21 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
   }
 
   useEffect(() => {
+    if (initialData === null) {
+      return
+    }
+
+    const variantsMap: Record<number, Variant[]> = {}
+    initialData.forEach(product => {
+      variantsMap[product.id] = Array.isArray(product.variants) ? product.variants : []
+    })
+    setProducts(initialData)
+    setVariantsByProduct(variantsMap)
+    setLoading(false)
+  }, [initialData])
+
+  useEffect(() => {
     if (initialData !== null) {
-      const variantsMap: Record<number, Variant[]> = {}
-      initialData.forEach(product => {
-        variantsMap[product.id] = Array.isArray(product.variants) ? product.variants : []
-      })
-      setProducts(initialData)
-      setVariantsByProduct(variantsMap)
-      setLoading(false)
       return
     }
 
@@ -112,7 +120,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
     }
     setError('')
     try {
-      const productsData = await api.getProducts()
+      const productsData = await productApi.getProducts()
       await hydrateProductsData(productsData)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load data'
@@ -154,10 +162,10 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
     if (gridVariants.length === 0) return
     setSavingVariants(true)
     try {
-      for (const v of gridVariants) {
-        await api.createVariant(productId, v.color, v.size, v.available)
-      }
-      const updated = await api.getVariants(productId)
+      const createdVariants = await productApi.createVariantsBulk(productId, gridVariants)
+      const existingVariants = variantsByProduct[productId] || []
+      const updated = [...createdVariants, ...existingVariants].sort((a, b) => b.id - a.id)
+
       setVariantsByProduct(prev => ({ ...prev, [productId]: updated }))
       syncProductVariants(productId, updated)
       setShowVariantGrid(null)
@@ -168,11 +176,12 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
       notify({
         type: 'success',
         title: 'Variants saved',
-        message: `${updated.length} total variants available for this product.`,
+        message: `${createdVariants.length} variants added.`,
       })
     } catch (err) {
-      setError('Failed to save variants')
-      notify({ type: 'error', title: 'Could not save variants' })
+      const message = err instanceof Error ? err.message : 'Failed to save variants'
+      setError(message)
+      notify({ type: 'error', title: 'Could not save variants', message })
     } finally {
       setSavingVariants(false)
     }
@@ -190,7 +199,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
     if (!newName.trim() || !newPrice) return
     setAddingProduct(true)
     try {
-      const created = await api.createProduct(
+      const created = await productApi.createProduct(
         newName.trim(),
         parseFloat(newPrice),
         newKeywords.trim() || undefined,
@@ -217,7 +226,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
   const handleDeleteProduct = async (id: number) => {
     if (!confirm('Delete this product and all its variants?')) return
     try {
-      await api.deleteProduct(id)
+      await productApi.deleteProduct(id)
       const nextProducts = products.filter(p => p.id !== id)
       setProducts(nextProducts)
       onDataChange?.(nextProducts)
@@ -248,7 +257,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
       )
     )
     try {
-      await api.updateVariant(variant.id, !variant.available)
+      await productApi.updateVariant(variant.id, !variant.available)
     } catch (err) {
       // Revert on failure
       setVariantsByProduct(prev => ({
@@ -279,7 +288,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
     }))
     syncProductVariants(productId, updatedVariants)
     try {
-      await Promise.all(variants.map(v => api.updateVariant(v.id, available)))
+      await Promise.all(variants.map(v => productApi.updateVariant(v.id, available)))
       notify({
         type: 'success',
         title: available ? 'All variants marked in stock' : 'All variants marked sold out',
