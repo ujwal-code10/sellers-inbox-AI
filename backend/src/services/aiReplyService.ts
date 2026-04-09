@@ -8,6 +8,18 @@ import { incrementReplyCount } from "../middleware/checkPlan.js";
 import { SellerIntent, SuggestReplyInput, SuggestReplyResponse } from "../models/ai.js";
 import { logAIUsage } from "./aiUsageService.js";
 
+const AI_SELECTION_DEBUG_ENABLED =
+  process.env.ENABLE_AI_SELECTION_DEBUG === "true" &&
+  process.env.NODE_ENV !== "production";
+
+function logAiSelectionDebug(event: string, details: Record<string, unknown>): void {
+  if (!AI_SELECTION_DEBUG_ENABLED) {
+    return;
+  }
+
+  console.info("[AI_SELECTION_DEBUG][server]", event, details);
+}
+
 export class AIServiceError extends Error {
   status: number;
 
@@ -142,6 +154,7 @@ function buildContextMessage(params: {
   productsForPrompt: any[];
   variants: any[];
   deliveryContext: string;
+  includeAliases: boolean;
 }): string {
   return `
 Customer Message: ${params.customerMessage}
@@ -152,7 +165,12 @@ Available Products:
   ${params.productsForPrompt
     .map((p: any) => {
       const productVariants = params.variants.filter((v: any) => v.product_id === p.id);
-      return `- ${p.name} (Rs. ${p.price})${p.keywords ? ` [also known as: ${p.keywords}]` : ""}
+      const aliasSegment =
+        params.includeAliases && p.keywords
+          ? ` [also known as: ${p.keywords}]`
+          : "";
+
+      return `- ${p.name} (Rs. ${p.price})${aliasSegment}
   Variants: ${productVariants
     .map(
       (v: any) => `${v.color} ${v.size} (${v.available ? "Available" : "Out of stock"})`
@@ -165,12 +183,46 @@ ${params.deliveryContext}
 `;
 }
 
+function formatPrice(value: unknown): string {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) {
+    return "0";
+  }
+
+  if (Number.isInteger(amount)) {
+    return String(amount);
+  }
+
+  return amount.toFixed(2).replace(/\.00$/, "");
+}
+
+function buildForcedPriceReply(product: { name: string; price: unknown }): string {
+  return `${product.name} ko price Rs. ${formatPrice(product.price)} ho.`;
+}
+
 export async function suggestReplyForUser(params: {
   userId: number;
   input: SuggestReplyInput;
 }): Promise<SuggestReplyResponse> {
   const { userId, input } = params;
-  const normalizedForcedProduct = input.forcedProduct;
+  const normalizedForcedProduct = input.forcedProduct.trim();
+  const normalizedForcedProductId =
+    typeof input.forcedProductId === "number" && Number.isInteger(input.forcedProductId)
+      ? input.forcedProductId
+      : undefined;
+  const hasForcedSelection =
+    typeof normalizedForcedProductId === "number" || normalizedForcedProduct.length > 0;
+
+  logAiSelectionDebug("request_received", {
+    userId,
+    hasForcedSelection,
+    forcedProductId: normalizedForcedProductId ?? null,
+    forcedProductName: normalizedForcedProduct || null,
+    messagePreview: input.customerMessage.slice(0, 120),
+    source: input.source,
+    hasMedia: input.hasMedia,
+    recentProducts: input.recentProducts,
+  });
 
   try {
     const productsRes = await pool.query(
@@ -200,12 +252,54 @@ export async function suggestReplyForUser(params: {
 
     const products = productsRes.rows;
     const variants = variantsRes.rows;
-    const selectedProduct = normalizedForcedProduct
-      ? products.find(
-          (product: any) =>
+
+    logAiSelectionDebug("context_loaded", {
+      userId,
+      productCount: products.length,
+      variantCount: variants.length,
+      topProducts: products.slice(0, 8).map((p: any) => ({
+        id: Number(p.id),
+        name: p.name,
+      })),
+    });
+
+    const selectedProduct = hasForcedSelection
+      ? products.find((product: any) => {
+          if (typeof normalizedForcedProductId === "number") {
+            return Number(product.id) === normalizedForcedProductId;
+          }
+
+          return (
             String(product.name).toLowerCase() === normalizedForcedProduct.toLowerCase()
-        )
+          );
+        })
       : null;
+
+    logAiSelectionDebug("forced_selection_resolved", {
+      userId,
+      hasForcedSelection,
+      forcedProductId: normalizedForcedProductId ?? null,
+      forcedProductName: normalizedForcedProduct || null,
+      selectedProductId: selectedProduct ? Number(selectedProduct.id) : null,
+      selectedProductName: selectedProduct ? selectedProduct.name : null,
+    });
+
+    if (hasForcedSelection && !selectedProduct) {
+      logAiSelectionDebug("forced_selection_missing", {
+        userId,
+        forcedProductId: normalizedForcedProductId ?? null,
+        forcedProductName: normalizedForcedProduct || null,
+        availableProducts: products.slice(0, 12).map((p: any) => ({
+          id: Number(p.id),
+          name: p.name,
+        })),
+      });
+
+      throw new AIServiceError(
+        "Selected product could not be found. Please select the product again.",
+        400
+      );
+    }
 
     let productContext: {
       productKnown: boolean;
@@ -213,11 +307,11 @@ export async function suggestReplyForUser(params: {
       candidateProducts?: string[];
     };
 
-    if (normalizedForcedProduct) {
+    if (selectedProduct) {
       productContext = {
         productKnown: true,
-        matchedProduct: selectedProduct?.name || normalizedForcedProduct,
-        candidateProducts: [selectedProduct?.name || normalizedForcedProduct],
+        matchedProduct: selectedProduct.name,
+        candidateProducts: [selectedProduct.name],
       };
     } else {
       productContext = resolveProductContext({
@@ -247,12 +341,22 @@ export async function suggestReplyForUser(params: {
       confidence,
     });
 
-    const finalDecision = normalizedForcedProduct
+    const finalDecision = selectedProduct
       ? {
           action: "REPLY" as const,
           reason: "Seller selected product manually",
         }
       : decision;
+
+    logAiSelectionDebug("decision_ready", {
+      userId,
+      action: finalDecision.action,
+      reason: finalDecision.reason,
+      intent,
+      productKnown: productContext.productKnown,
+      matchedProduct: productContext.matchedProduct ?? null,
+      candidates: productContext.candidateProducts || [],
+    });
 
     if (finalDecision.action === "ASK") {
       const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -290,6 +394,39 @@ export async function suggestReplyForUser(params: {
       };
     }
 
+    if (selectedProduct && intent === "PRICE") {
+      const directReply = buildForcedPriceReply(selectedProduct);
+
+      logAiSelectionDebug("forced_price_reply", {
+        userId,
+        selectedProductId: Number(selectedProduct.id),
+        selectedProductName: selectedProduct.name,
+        replyPreview: directReply,
+      });
+
+      await incrementReplyCount(userId);
+      await logAIUsage({
+        userId,
+        requestType: "suggest_reply",
+        inputTokens: 0,
+        outputTokens: 0,
+        latencyMs: 0,
+        status: "success",
+      });
+
+      return {
+        suggestions: [directReply],
+        decision: {
+          action: "REPLY",
+          reason: finalDecision.reason,
+          productKnown: true,
+          matchedProduct: selectedProduct.name,
+          intent,
+          productCandidates: [selectedProduct.name],
+        },
+      };
+    }
+
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
     const zonesRes = await pool.query(
@@ -303,15 +440,27 @@ export async function suggestReplyForUser(params: {
     const deliveryContext = buildDeliveryContext(zonesRes.rows);
 
     const productsForPrompt = selectedProduct ? [selectedProduct] : products;
-    const forcedProductInstruction = normalizedForcedProduct
+    const forcedProductInstruction = selectedProduct
       ? `
   Selected Product (seller-confirmed): ${productContext.matchedProduct}
   IMPORTANT:
+  - Use this exact product name in your reply: ${productContext.matchedProduct}
   - Seller already selected the product manually.
   - Do NOT ask which product the customer means.
   - Answer for this selected product only.
+  - Do NOT switch to alias/category names unless customer used the same wording.
   `
       : "";
+
+    logAiSelectionDebug("prompt_scope", {
+      userId,
+      forcedSelectionUsed: Boolean(selectedProduct),
+      promptProductCount: productsForPrompt.length,
+      promptProducts: productsForPrompt.slice(0, 8).map((p: any) => ({
+        id: Number(p.id),
+        name: p.name,
+      })),
+    });
 
     const contextMessage = buildContextMessage({
       customerMessage: input.customerMessage,
@@ -319,6 +468,7 @@ export async function suggestReplyForUser(params: {
       productsForPrompt,
       variants,
       deliveryContext,
+      includeAliases: !selectedProduct,
     });
 
     const completion = await groq.chat.completions.create({
@@ -356,6 +506,13 @@ export async function suggestReplyForUser(params: {
       },
     };
   } catch (err: any) {
+    logAiSelectionDebug("request_failed", {
+      userId,
+      errorName: err?.name || "UnknownError",
+      errorMessage: err?.message || "Unknown error",
+      status: typeof err?.status === "number" ? err.status : null,
+    });
+
     console.error("AI suggest-reply error:", err);
 
     await logAIUsage({

@@ -211,6 +211,11 @@ Backend uses:
 - CORS_ORIGINS
 - NODE_ENV
 
+Optional debug toggles:
+
+- ENABLE_AI_SELECTION_DEBUG=true (backend: logs product-selection trace for suggest-reply in non-production)
+- VITE_AI_SELECTION_DEBUG=true (frontend: logs picker/generate trace in browser console)
+
 ## Local Development Setup
 
 Prerequisites:

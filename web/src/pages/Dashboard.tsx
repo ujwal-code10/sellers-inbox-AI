@@ -59,6 +59,20 @@ export default function Dashboard() {
   const [showProductSearch, setShowProductSearch] = useState(false)
   const [showProductPicker, setShowProductPicker] = useState(false)
   const [recentProductNames, setRecentProductNames] = useState<string[]>([])
+  const aiSelectionDebugEnabled =
+    import.meta.env.DEV || import.meta.env.VITE_AI_SELECTION_DEBUG === 'true'
+
+  const logAiSelectionDebug = (
+    event: string,
+    details?: Record<string, unknown>
+  ) => {
+    if (!aiSelectionDebugEnabled) return
+    if (details) {
+      console.info('[AI_SELECTION_DEBUG][dashboard]', event, details)
+      return
+    }
+    console.info('[AI_SELECTION_DEBUG][dashboard]', event)
+  }
 
   useEffect(() => {
     let active = true
@@ -190,8 +204,14 @@ export default function Dashboard() {
     })
   }
 
-  const handleProductSelect = async (productName: string) => {
+  const handleProductSelect = async (product: Product) => {
     if (!customerMessage.trim()) return
+
+    logAiSelectionDebug('manual_product_selected', {
+      selectedProductId: product.id,
+      selectedProductName: product.name,
+      messagePreview: customerMessage.trim().slice(0, 120),
+    })
 
     setError('')
     setLoading(true)
@@ -200,15 +220,36 @@ export default function Dashboard() {
     setProductSearch('')
 
     try {
-      const response = await aiApi.suggestReply(customerMessage.trim(), undefined, productName)
+      const response = await aiApi.suggestReply(
+        customerMessage.trim(),
+        undefined,
+        product.name,
+        { forcedProductId: product.id }
+      )
+
+      logAiSelectionDebug('manual_selection_response', {
+        selectedProductId: product.id,
+        selectedProductName: product.name,
+        decisionAction: response.decision.action,
+        matchedProduct: response.decision.matchedProduct || null,
+        candidates: response.decision.productCandidates || [],
+        firstSuggestionPreview: response.suggestions[0]?.slice(0, 180) || null,
+      })
+
       setResult(response)
-      addRecentProduct(productName)
+      addRecentProduct(product.name)
       notify({
         type: 'success',
         title: 'Reply refreshed with selected product',
-        message: productName,
+        message: product.name,
       })
     } catch (err: any) {
+      logAiSelectionDebug('manual_selection_error', {
+        selectedProductId: product.id,
+        selectedProductName: product.name,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      })
+
       if (err.message === 'Daily limit reached') {
         setPaywallReason('replies')
         setShowPaywall(true)
@@ -239,6 +280,13 @@ export default function Dashboard() {
     setShowProductPicker(false)
     setShowProductSearch(false)
 
+    logAiSelectionDebug('generate_requested', {
+      messagePreview: customerMessage.trim().slice(0, 120),
+      source: 'DM',
+      recentProducts: recentProductNames,
+      productCount: products.length,
+    })
+
     try {
       const response = await aiApi.suggestReply(
         customerMessage.trim(),
@@ -249,6 +297,15 @@ export default function Dashboard() {
           recentProducts: recentProductNames,
         }
       )
+
+      logAiSelectionDebug('generate_response', {
+        decisionAction: response.decision.action,
+        reason: response.decision.reason,
+        matchedProduct: response.decision.matchedProduct || null,
+        candidates: response.decision.productCandidates || [],
+        firstSuggestionPreview: response.suggestions[0]?.slice(0, 180) || null,
+      })
+
       setResult(response)
       if (response.decision.matchedProduct) {
         addRecentProduct(response.decision.matchedProduct)
@@ -257,6 +314,10 @@ export default function Dashboard() {
       if (response.decision.action === 'ASK') {
         // Refetch products to ensure we have the latest list
         await loadProducts()
+        logAiSelectionDebug('clarification_picker_shown', {
+          candidateProducts: response.decision.productCandidates || [],
+          loadedProducts: products.length,
+        })
         setShowProductPicker(true)
         notify({
           type: 'info',
@@ -271,6 +332,10 @@ export default function Dashboard() {
         })
       }
     } catch (err: any) {
+      logAiSelectionDebug('generate_error', {
+        error: err instanceof Error ? err.message : 'Unknown error',
+      })
+
       // Check if this is a paywall error
       if (err.message === 'Daily limit reached') {
         setPaywallReason('replies')

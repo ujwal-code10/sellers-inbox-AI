@@ -67,6 +67,17 @@ export function parseSuggestReplyBody(body: unknown): SuggestReplyInput {
     throw new AISchemaError("forcedProduct must be a valid product name");
   }
 
+  const forcedProductId = body.forcedProductId;
+  if (
+    forcedProductId !== undefined &&
+    forcedProductId !== null &&
+    (typeof forcedProductId !== "number" ||
+      !Number.isInteger(forcedProductId) ||
+      forcedProductId <= 0)
+  ) {
+    throw new AISchemaError("forcedProductId must be a positive integer");
+  }
+
   const recentProducts = body.recentProducts;
   if (recentProducts && !Array.isArray(recentProducts)) {
     throw new AISchemaError("recentProducts must be an array of product names");
@@ -76,6 +87,10 @@ export function parseSuggestReplyBody(body: unknown): SuggestReplyInput {
     customerMessage,
     tone: typeof tone === "string" ? tone : undefined,
     forcedProduct: typeof forcedProduct === "string" ? forcedProduct.trim() : "",
+    forcedProductId:
+      typeof forcedProductId === "number" && Number.isInteger(forcedProductId)
+        ? forcedProductId
+        : undefined,
     source: toNormalizedSource(body.source),
     hasMedia: Boolean(body.hasMedia),
     recentProducts: toRecentProducts(recentProducts),

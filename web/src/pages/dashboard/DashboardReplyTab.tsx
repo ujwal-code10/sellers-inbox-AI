@@ -25,7 +25,7 @@ interface DashboardReplyTabProps {
   onProductSearchChange: (value: string) => void
   browseProducts: Product[]
   productsCount: number
-  onProductSelect: (productName: string) => void
+  onProductSelect: (product: Product) => void
   onCancelPicker: () => void
 }
 
@@ -146,7 +146,7 @@ export default function DashboardReplyTab({
                       {quickPickProducts.map((product) => (
                         <button
                           key={product.id}
-                          onClick={() => onProductSelect(product.name)}
+                          onClick={() => onProductSelect(product)}
                           className="product-chip-btn"
                         >
                           {product.name}
@@ -188,7 +188,7 @@ export default function DashboardReplyTab({
                         {browseProducts.map((product) => (
                           <button
                             key={product.id}
-                            onClick={() => onProductSelect(product.name)}
+                            onClick={() => onProductSelect(product)}
                             className="product-chip-btn"
                           >
                             {product.name}

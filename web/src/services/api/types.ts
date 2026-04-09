@@ -120,6 +120,7 @@ export interface SuggestReplyOptions {
   source?: MessageSource
   hasMedia?: boolean
   recentProducts?: string[]
+  forcedProductId?: number
 }
 
 export interface SuggestReplyResponse {
