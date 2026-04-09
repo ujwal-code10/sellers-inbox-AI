@@ -10,14 +10,24 @@ import {
   selectUserGrowthRows,
 } from "../repositories/analyticsRepository.js";
 
+function toInt(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : 0;
+}
+
+function toFloat(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export async function getDashboardStats() {
   const [
-    userStats,
-    subscriptionStats,
-    mrrResult,
-    aiStats,
-    usageToday,
-    transactionStats,
+    userStatsRow,
+    subscriptionStatsRow,
+    mrrRow,
+    aiStatsRow,
+    usageTodayRow,
+    transactionStatsRow,
   ] = await Promise.all([
     selectDashboardUserStats(),
     selectDashboardSubscriptionStats(),
@@ -27,33 +37,46 @@ export async function getDashboardStats() {
     selectDashboardTransactionStats(),
   ]);
 
+  const userStats = userStatsRow ?? {};
+  const subscriptionStats = subscriptionStatsRow ?? {};
+  const mrrResult = mrrRow ?? {};
+  const aiStats = aiStatsRow ?? {};
+  const usageToday = usageTodayRow ?? {};
+  const transactionStats = transactionStatsRow ?? {};
+
   return {
     users: {
-      total: parseInt(userStats.rows[0].total, 10),
-      active: parseInt(userStats.rows[0].active, 10),
-      banned: parseInt(userStats.rows[0].banned, 10),
-      new_today: parseInt(userStats.rows[0].new_today, 10),
-      new_this_week: parseInt(userStats.rows[0].new_this_week, 10),
+      total: toInt((userStats as Record<string, unknown>).total),
+      active: toInt((userStats as Record<string, unknown>).active),
+      banned: toInt((userStats as Record<string, unknown>).banned),
+      new_today: toInt((userStats as Record<string, unknown>).new_today),
+      new_this_week: toInt((userStats as Record<string, unknown>).new_this_week),
     },
     subscriptions: {
-      free: parseInt(subscriptionStats.rows[0].free, 10),
-      pro_monthly: parseInt(subscriptionStats.rows[0].pro_monthly, 10),
-      pro_yearly: parseInt(subscriptionStats.rows[0].pro_yearly, 10),
-      mrr: parseFloat(mrrResult.rows[0].mrr),
+      free: toInt((subscriptionStats as Record<string, unknown>).free),
+      pro_monthly: toInt((subscriptionStats as Record<string, unknown>).pro_monthly),
+      pro_yearly: toInt((subscriptionStats as Record<string, unknown>).pro_yearly),
+      mrr: toFloat((mrrResult as Record<string, unknown>).mrr),
     },
     ai: {
-      requests_today: parseInt(usageToday.rows[0].total, 10),
-      requests_this_month: parseInt(aiStats.rows[0].requests_this_month, 10),
-      avg_latency_ms: Math.round(parseFloat(aiStats.rows[0].avg_latency_ms) || 0),
+      requests_today: toInt((usageToday as Record<string, unknown>).total),
+      requests_this_month: toInt(
+        (aiStats as Record<string, unknown>).requests_this_month
+      ),
+      avg_latency_ms: Math.round(
+        toFloat((aiStats as Record<string, unknown>).avg_latency_ms)
+      ),
     },
     transactions: {
       today: {
-        count: parseInt(transactionStats.rows[0].count_today, 10),
-        amount: parseFloat(transactionStats.rows[0].amount_today),
+        count: toInt((transactionStats as Record<string, unknown>).count_today),
+        amount: toFloat((transactionStats as Record<string, unknown>).amount_today),
       },
       this_month: {
-        count: parseInt(transactionStats.rows[0].count_this_month, 10),
-        amount: parseFloat(transactionStats.rows[0].amount_this_month),
+        count: toInt((transactionStats as Record<string, unknown>).count_this_month),
+        amount: toFloat(
+          (transactionStats as Record<string, unknown>).amount_this_month
+        ),
       },
     },
   };
