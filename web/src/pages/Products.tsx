@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { productApi } from '../services/api/productApi'
 import type { Product, Variant } from '../services/api/types'
 import { useUIFeedback } from '../context/UIFeedbackContext'
@@ -255,6 +256,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
   const [quickDraft, setQuickDraft] = useState<QuickAddDraft>(EMPTY_QUICK_DRAFT)
   const [quickParsed, setQuickParsed] = useState(false)
   const [quickParseError, setQuickParseError] = useState('')
+  const quickPreviewRef = useRef<HTMLDivElement | null>(null)
 
   // Variant grid generator
   const [showVariantGrid, setShowVariantGrid] = useState<number | null>(null)
@@ -382,6 +384,19 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
     loadData()
   }, [])
 
+  useEffect(() => {
+    if (!showAddProduct) {
+      return
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [showAddProduct])
+
   const loadData = async (showSpinner = true) => {
     if (showSpinner) {
       setLoading(true)
@@ -474,6 +489,10 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
 
     setQuickDraft(parsed)
     setQuickParsed(true)
+
+    window.setTimeout(() => {
+      quickPreviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 0)
 
     if (!parsed.price) {
       setQuickParseError('Price was not detected. Please enter price in the preview before saving.')
@@ -704,12 +723,11 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
       </AppAlert>
 
       {/* ── Add Product Modal ── */}
-      {showAddProduct && (
+      {showAddProduct && typeof document !== 'undefined' && createPortal(
         <div className="modal-overlay" onClick={closeAddProductModal}>
           <div
-            className="modal"
+            className="modal modal-add-product"
             onClick={e => e.stopPropagation()}
-            style={addProductMode === 'quick' ? { width: 'min(720px, 95vw)' } : undefined}
           >
             <h3>Add Product</h3>
 
@@ -780,6 +798,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
                 {quickParsed ? (
                   <>
                     <div
+                      ref={quickPreviewRef}
                       style={{
                         display: 'grid',
                         gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -925,7 +944,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
             )}
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* ── Products List ── */}
       {products.length === 0 ? (
