@@ -1193,6 +1193,10 @@ body {
   max-width: 720px;
 }
 
+.modal.modal-add-product .modal-buttons {
+  margin-top: 16px;
+}
+
 .paywall-modal {
   text-align: center;
   padding: 24px;
@@ -1293,10 +1297,25 @@ body {
   .modal.modal-add-product {
     width: 100%;
     max-width: none;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
   }
 
   .modal-buttons {
     flex-direction: column;
+  }
+
+  .modal.modal-add-product .modal-buttons {
+    position: sticky;
+    bottom: calc(-16px - env(safe-area-inset-bottom));
+    margin-top: 14px;
+    padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, #ffffff 24%);
+    border-top: 1px solid #e4ebe7;
+    z-index: 2;
+  }
+
+  .modal.modal-add-product .modal-buttons .app-btn {
+    min-height: 44px;
   }
 }
 
