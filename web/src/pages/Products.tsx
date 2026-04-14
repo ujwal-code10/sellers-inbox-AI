@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { productApi } from '../services/api/productApi'
 import type { Product, Variant } from '../services/api/types'
 import { useUIFeedback } from '../context/UIFeedbackContext'
@@ -383,6 +384,19 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
     loadData()
   }, [])
 
+  useEffect(() => {
+    if (!showAddProduct) {
+      return
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [showAddProduct])
+
   const loadData = async (showSpinner = true) => {
     if (showSpinner) {
       setLoading(true)
@@ -709,12 +723,11 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
       </AppAlert>
 
       {/* ── Add Product Modal ── */}
-      {showAddProduct && (
+      {showAddProduct && typeof document !== 'undefined' && createPortal(
         <div className="modal-overlay" onClick={closeAddProductModal}>
           <div
-            className="modal"
+            className="modal modal-add-product"
             onClick={e => e.stopPropagation()}
-            style={addProductMode === 'quick' ? { width: 'min(720px, 95vw)' } : undefined}
           >
             <h3>Add Product</h3>
 
@@ -931,7 +944,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
             )}
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* ── Products List ── */}
       {products.length === 0 ? (

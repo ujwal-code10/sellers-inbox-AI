@@ -1172,7 +1172,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 20px;
-  z-index: 1000;
+  z-index: 5000;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
@@ -1187,6 +1187,10 @@ body {
   max-height: calc(100dvh - 40px);
   overflow-y: auto;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal.modal-add-product {
+  max-width: 720px;
 }
 
 .paywall-modal {
@@ -1284,6 +1288,11 @@ body {
     max-height: calc(100dvh - 24px);
     border-radius: 14px;
     padding: 16px;
+  }
+
+  .modal.modal-add-product {
+    width: 100%;
+    max-width: none;
   }
 
   .modal-buttons {
