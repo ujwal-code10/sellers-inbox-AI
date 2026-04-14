@@ -1173,6 +1173,9 @@ body {
   justify-content: center;
   padding: 20px;
   z-index: 1000;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .modal {
@@ -1181,6 +1184,8 @@ body {
   padding: 24px;
   width: 100%;
   max-width: 400px;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
 }
 
@@ -1265,6 +1270,25 @@ body {
   display: flex;
   gap: 12px;
   margin-top: 24px;
+}
+
+@media (max-width: 768px) {
+  .modal-overlay {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 24px);
+    border-radius: 14px;
+    padding: 16px;
+  }
+
+  .modal-buttons {
+    flex-direction: column;
+  }
 }
 
 .btn-cancel {

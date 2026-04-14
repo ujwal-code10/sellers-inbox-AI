@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { productApi } from '../services/api/productApi'
 import type { Product, Variant } from '../services/api/types'
 import { useUIFeedback } from '../context/UIFeedbackContext'
@@ -255,6 +255,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
   const [quickDraft, setQuickDraft] = useState<QuickAddDraft>(EMPTY_QUICK_DRAFT)
   const [quickParsed, setQuickParsed] = useState(false)
   const [quickParseError, setQuickParseError] = useState('')
+  const quickPreviewRef = useRef<HTMLDivElement | null>(null)
 
   // Variant grid generator
   const [showVariantGrid, setShowVariantGrid] = useState<number | null>(null)
@@ -474,6 +475,10 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
 
     setQuickDraft(parsed)
     setQuickParsed(true)
+
+    window.setTimeout(() => {
+      quickPreviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 0)
 
     if (!parsed.price) {
       setQuickParseError('Price was not detected. Please enter price in the preview before saving.')
@@ -780,6 +785,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
                 {quickParsed ? (
                   <>
                     <div
+                      ref={quickPreviewRef}
                       style={{
                         display: 'grid',
                         gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
