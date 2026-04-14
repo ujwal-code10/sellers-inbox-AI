@@ -3,6 +3,12 @@ import AppAlert from '../../components/ui/AppAlert'
 import AppButton from '../../components/ui/AppButton'
 import type { Product, SuggestReplyResponse } from '../../services/api/types'
 
+interface ContextSlotView {
+  id: string
+  label: string
+  lastSelectedProductName?: string
+}
+
 interface DashboardReplyTabProps {
   customerMessage: string
   onCustomerMessageChange: (value: string) => void
@@ -26,6 +32,12 @@ interface DashboardReplyTabProps {
   browseProducts: Product[]
   productsCount: number
   onProductSelect: (product: Product) => void
+  contextSlots: ContextSlotView[]
+  activeContextSlotId: string
+  activeContextProductName?: string
+  contextHintMessage: string
+  onSelectContextSlot: (slotId: string) => void
+  onClearContext: () => void
   onCancelPicker: () => void
 }
 
@@ -52,6 +64,12 @@ export default function DashboardReplyTab({
   browseProducts,
   productsCount,
   onProductSelect,
+  contextSlots,
+  activeContextSlotId,
+  activeContextProductName,
+  contextHintMessage,
+  onSelectContextSlot,
+  onClearContext,
   onCancelPicker,
 }: DashboardReplyTabProps) {
   const showDecisionDebugInfo =
@@ -61,6 +79,54 @@ export default function DashboardReplyTab({
     <section className="dashboard-tab-wrap dashboard-tab-wrap-reply">
       <div className="reply-generator">
         <div className="input-section">
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+              Conversation context
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+              {contextSlots.map((slot) => {
+                const slotLabel = slot.lastSelectedProductName
+                  ? `${slot.label} - ${slot.lastSelectedProductName}`
+                  : slot.label
+
+                return (
+                  <AppButton
+                    key={slot.id}
+                    onClick={() => onSelectContextSlot(slot.id)}
+                    variant={slot.id === activeContextSlotId ? 'primary' : 'secondary'}
+                    size="sm"
+                  >
+                    {slotLabel}
+                  </AppButton>
+                )
+              })}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ fontSize: 12, color: '#596273' }}>
+                {activeContextProductName
+                  ? `Active slot remembers: ${activeContextProductName}`
+                  : 'Active slot has no saved product yet.'}
+              </div>
+
+              <AppButton
+                onClick={onClearContext}
+                variant="secondary"
+                size="sm"
+                disabled={!activeContextProductName}
+              >
+                Clear context
+              </AppButton>
+            </div>
+          </div>
+
+          {contextHintMessage ? (
+            <AppAlert type="info" title="Context memory">
+              {contextHintMessage}
+            </AppAlert>
+          ) : null}
+
           <label htmlFor="customerMessage">Customer Message</label>
           <textarea
             id="customerMessage"

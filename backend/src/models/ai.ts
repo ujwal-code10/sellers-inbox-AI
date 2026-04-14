@@ -15,6 +15,7 @@ export interface SuggestReplyInput {
   tone?: string;
   forcedProduct: string;
   forcedProductId?: number;
+  followUpContext: boolean;
   source: MessageSource;
   hasMedia: boolean;
   recentProducts: string[];

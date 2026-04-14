@@ -13,6 +13,7 @@ AI should never guess. If certainty is insufficient, ask clarification.
 2. Intent Detection: PRICE | AVAILABILITY | DELIVERY | COD | GENERAL.
 3. Confidence Level: HIGH | MEDIUM | LOW.
 4. Candidate Ranking: if product is unknown, return top likely product candidates for one-tap selection.
+5. Follow-up Context Flag: when true, apply concise same-conversation follow-up style (especially for availability replies).
 
 ## Decision Outcomes
 1. REPLY
@@ -42,3 +43,4 @@ AI should never guess. If certainty is insufficient, ask clarification.
 - ASK responses should prioritize one-tap recovery with likely products first.
 - First-message cold-start must still return useful quick picks (stock-ready products) even when recent history is empty.
 - If recent product hints are available, include them in candidate ranking but never bypass safety rules.
+- In follow-up context, availability replies should stay focused on asked attributes (size-only -> size answer, color-only -> color answer).

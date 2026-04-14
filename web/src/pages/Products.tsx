@@ -11,6 +11,225 @@ interface VariantRow {
   available: boolean
 }
 
+type AddProductMode = 'quick' | 'manual'
+
+interface QuickAddDraft {
+  name: string
+  price: string
+  colors: string
+  sizes: string
+}
+
+const EMPTY_QUICK_DRAFT: QuickAddDraft = {
+  name: '',
+  price: '',
+  colors: '',
+  sizes: '',
+}
+
+const SIZE_TOKEN_PATTERN =
+  /^(xxs|xs|s|m|l|x|xl|xxl|xxxl|2xl|3xl|4xl|5xl|fs|freesize|small|medium|large|extralarge|\d{2,3})$/i
+
+const SIZE_TOKEN_ALIASES: Record<string, string> = {
+  'free size': 'freesize',
+  xll: 'xl',
+  xl1: 'xl',
+  xli: 'xl',
+  xlll: 'xxl',
+  xxl1: 'xxl',
+  xxli: 'xxl',
+  xxll: 'xxl',
+  xxxl1: 'xxxl',
+  xxxli: 'xxxl',
+  xxxll: 'xxxl',
+}
+
+const SIZE_DISPLAY_MAP: Record<string, string> = {
+  small: 'S',
+  medium: 'M',
+  large: 'L',
+  extralarge: 'XL',
+  freesize: 'FREE SIZE',
+  fs: 'FREE SIZE',
+}
+
+const COLOR_KEYWORDS = [
+  'black',
+  'white',
+  'green',
+  'blue',
+  'red',
+  'pink',
+  'yellow',
+  'brown',
+  'grey',
+  'gray',
+  'purple',
+  'orange',
+  'maroon',
+  'cream',
+  'beige',
+  'navy',
+  'olive',
+  'silver',
+  'gold',
+]
+
+function dedupeCaseInsensitive(items: string[]): string[] {
+  const seen = new Set<string>()
+  const deduped: string[] = []
+
+  for (const item of items) {
+    const key = item.toLowerCase()
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    deduped.push(item)
+  }
+
+  return deduped
+}
+
+function normalizeSizeToken(token: string): string {
+  const trimmed = token.trim().toLowerCase()
+  const compact = trimmed.replace(/[^a-z0-9\s]+/g, '').replace(/\s+/g, '')
+  const compactAlias = SIZE_TOKEN_ALIASES[compact]
+  if (compactAlias) {
+    return compactAlias
+  }
+
+  const typoNormalized = compact
+    .replace(/^xl1$/, 'xl')
+    .replace(/^xli$/, 'xl')
+    .replace(/^xxl1$/, 'xxl')
+    .replace(/^xxli$/, 'xxl')
+    .replace(/^xxxl1$/, 'xxxl')
+    .replace(/^xxxli$/, 'xxxl')
+
+  const typoAlias = SIZE_TOKEN_ALIASES[typoNormalized]
+  if (typoAlias) {
+    return typoAlias
+  }
+
+  const trimmedAlias = SIZE_TOKEN_ALIASES[trimmed]
+  if (trimmedAlias) {
+    return trimmedAlias
+  }
+
+  return typoNormalized
+}
+
+function toDisplayToken(token: string): string {
+  const trimmed = token.trim()
+  if (!trimmed) return ''
+
+  const normalizedSize = normalizeSizeToken(trimmed)
+  if (SIZE_TOKEN_PATTERN.test(normalizedSize)) {
+    if (SIZE_DISPLAY_MAP[normalizedSize]) {
+      return SIZE_DISPLAY_MAP[normalizedSize]
+    }
+    return normalizedSize.toUpperCase()
+  }
+
+  return trimmed
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ')
+}
+
+function parseCommaList(value: string): string[] {
+  const items = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map(toDisplayToken)
+
+  return dedupeCaseInsensitive(items)
+}
+
+function isLikelySize(token: string): boolean {
+  const normalized = normalizeSizeToken(token)
+  return SIZE_TOKEN_PATTERN.test(normalized)
+}
+
+function isLikelyColor(token: string): boolean {
+  const normalized = token.toLowerCase()
+  return COLOR_KEYWORDS.some((keyword) => normalized.includes(keyword))
+}
+
+function parseQuickAddInput(rawInput: string): QuickAddDraft | null {
+  const normalized = rawInput.replace(/\n/g, ',').replace(/\|/g, ',')
+  const tokens = normalized
+    .split(',')
+    .map((token) => token.trim())
+    .filter(Boolean)
+
+  if (tokens.length === 0) {
+    return null
+  }
+
+  let parsedPrice = ''
+  const nonPriceTokens: string[] = []
+
+  for (const token of tokens) {
+    const priceMatch = token.match(/(?:rs\.?|npr)\s*([0-9]+(?:\.[0-9]{1,2})?)|^([0-9]+(?:\.[0-9]{1,2})?)$/i)
+
+    if (!parsedPrice && priceMatch) {
+      parsedPrice = priceMatch[1] || priceMatch[2] || ''
+      const leftover = token.replace(priceMatch[0], '').replace(/^[-:\s]+|[-:\s]+$/g, '')
+      if (leftover) {
+        nonPriceTokens.push(leftover)
+      }
+      continue
+    }
+
+    nonPriceTokens.push(token)
+  }
+
+  if (nonPriceTokens.length === 0) {
+    return null
+  }
+
+  const name = nonPriceTokens[0].trim()
+  const colors: string[] = []
+  const sizes: string[] = []
+
+  for (const token of nonPriceTokens.slice(1)) {
+    if (isLikelySize(token)) {
+      sizes.push(toDisplayToken(token))
+      continue
+    }
+
+    if (isLikelyColor(token)) {
+      colors.push(toDisplayToken(token))
+      continue
+    }
+  }
+
+  return {
+    name,
+    price: parsedPrice,
+    colors: dedupeCaseInsensitive(colors).join(', '),
+    sizes: dedupeCaseInsensitive(sizes).join(', '),
+  }
+}
+
+function buildVariantCombinations(colors: string[], sizes: string[]): VariantRow[] {
+  if (colors.length === 0 || sizes.length === 0) {
+    return []
+  }
+
+  const combinations: VariantRow[] = []
+  for (const color of colors) {
+    for (const size of sizes) {
+      combinations.push({ color, size, available: true })
+    }
+  }
+
+  return combinations
+}
+
 interface ProductsProps {
   initialData?: Product[] | null
   onDataChange?: (products: Product[]) => void
@@ -31,6 +250,11 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
   const [newKeywords, setNewKeywords] = useState('')
   const [newNotes, setNewNotes] = useState('')
   const [addingProduct, setAddingProduct] = useState(false)
+  const [addProductMode, setAddProductMode] = useState<AddProductMode>('quick')
+  const [quickAddRaw, setQuickAddRaw] = useState('')
+  const [quickDraft, setQuickDraft] = useState<QuickAddDraft>(EMPTY_QUICK_DRAFT)
+  const [quickParsed, setQuickParsed] = useState(false)
+  const [quickParseError, setQuickParseError] = useState('')
 
   // Variant grid generator
   const [showVariantGrid, setShowVariantGrid] = useState<number | null>(null)
@@ -50,6 +274,50 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
       onDataChange?.(next)
       return next
     })
+  }
+
+  const resetManualAddForm = () => {
+    setNewName('')
+    setNewPrice('')
+    setNewKeywords('')
+    setNewNotes('')
+  }
+
+  const resetQuickAddForm = () => {
+    setQuickAddRaw('')
+    setQuickDraft({ ...EMPTY_QUICK_DRAFT })
+    setQuickParsed(false)
+    setQuickParseError('')
+  }
+
+  const openAddProductModal = () => {
+    setAddProductMode('quick')
+    setShowAddProduct(true)
+    resetQuickAddForm()
+  }
+
+  const closeAddProductModal = () => {
+    setShowAddProduct(false)
+    setAddProductMode('quick')
+    resetManualAddForm()
+    resetQuickAddForm()
+  }
+
+  const addCreatedProductToState = (created: Product, createdVariants: Variant[] = []) => {
+    const product: Product = { ...created, variants: createdVariants }
+    setProducts((prev) => {
+      const nextProducts = [product, ...prev]
+      onDataChange?.(nextProducts)
+      return nextProducts
+    })
+    setVariantsByProduct((prev) => ({
+      ...prev,
+      [product.id]: createdVariants,
+    }))
+  }
+
+  const updateQuickDraftField = (field: keyof QuickAddDraft, value: string) => {
+    setQuickDraft((prev) => ({ ...prev, [field]: value }))
   }
 
   const hydrateProductsData = async (productsData: Product[]) => {
@@ -194,25 +462,111 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
     setGridGenerated(false)
   }
 
+  const handleParseQuickAdd = () => {
+    setQuickParseError('')
+
+    const parsed = parseQuickAddInput(quickAddRaw)
+    if (!parsed || !parsed.name.trim()) {
+      setQuickParsed(false)
+      setQuickParseError('Could not parse product details. Add commas and include at least a product name.')
+      return
+    }
+
+    setQuickDraft(parsed)
+    setQuickParsed(true)
+
+    if (!parsed.price) {
+      setQuickParseError('Price was not detected. Please enter price in the preview before saving.')
+    }
+  }
+
+  const handleSaveQuickAdd = async () => {
+    const name = quickDraft.name.trim()
+    const priceValue = Number.parseFloat(quickDraft.price)
+    const colors = parseCommaList(quickDraft.colors)
+    const sizes = parseCommaList(quickDraft.sizes)
+    const variantsToCreate = buildVariantCombinations(colors, sizes)
+
+    if (!name) {
+      setQuickParseError('Product name is required.')
+      return
+    }
+
+    if (!Number.isFinite(priceValue) || priceValue <= 0) {
+      setQuickParseError('Valid price is required before saving.')
+      return
+    }
+
+    if (variantsToCreate.length > 200) {
+      setQuickParseError('Too many variants generated. Reduce colors/sizes (max 200 variants).')
+      return
+    }
+
+    setAddingProduct(true)
+    setQuickParseError('')
+
+    try {
+      const created = await productApi.createProduct(
+        name,
+        priceValue
+      )
+
+      let createdVariants: Variant[] = []
+      if (variantsToCreate.length > 0) {
+        try {
+          createdVariants = await productApi.createVariantsBulk(created.id, variantsToCreate)
+        } catch (variantErr) {
+          addCreatedProductToState(created, [])
+          closeAddProductModal()
+          const variantMessage =
+            variantErr instanceof Error ? variantErr.message : 'Failed to create variants'
+          notify({
+            type: 'warning',
+            title: 'Product added without variants',
+            message: `${created.name} was saved. ${variantMessage}. Add variants from the product card.`,
+          })
+          return
+        }
+      }
+
+      addCreatedProductToState(created, createdVariants)
+      closeAddProductModal()
+
+      notify({
+        type: 'success',
+        title: 'Quick add complete',
+        message:
+          createdVariants.length > 0
+            ? `${created.name} with ${createdVariants.length} variants saved.`
+            : `${created.name} saved. Add variants anytime.`,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to add product'
+      setError(message)
+      notify({ type: 'error', title: 'Could not save quick add', message })
+    } finally {
+      setAddingProduct(false)
+    }
+  }
+
   // ── Add product ──
   const handleAddProduct = async () => {
-    if (!newName.trim() || !newPrice) return
+    const name = newName.trim()
+    const priceValue = Number.parseFloat(newPrice)
+
+    if (!name || !Number.isFinite(priceValue) || priceValue <= 0) return
+
     setAddingProduct(true)
     try {
       const created = await productApi.createProduct(
-        newName.trim(),
-        parseFloat(newPrice),
+        name,
+        priceValue,
         newKeywords.trim() || undefined,
         newNotes.trim() || undefined
       )
-      const product: Product = { ...created, variants: [] }
-      const nextProducts = [product, ...products]
-      setProducts(nextProducts)
-      onDataChange?.(nextProducts)
-      setVariantsByProduct({ ...variantsByProduct, [product.id]: [] })
-      setNewName(''); setNewPrice(''); setNewKeywords(''); setNewNotes('')
-      setShowAddProduct(false)
-      notify({ type: 'success', title: 'Product added', message: product.name })
+      addCreatedProductToState(created, [])
+      closeAddProductModal()
+      notify({ type: 'success', title: 'Product added', message: created.name })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to add product'
       setError(message)
@@ -317,6 +671,14 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
     </div>
   )
 
+  const quickPreviewVariantsCount = buildVariantCombinations(
+    parseCommaList(quickDraft.colors),
+    parseCommaList(quickDraft.sizes)
+  ).length
+  const quickPriceValue = Number.parseFloat(quickDraft.price)
+  const quickSaveDisabled =
+    addingProduct || !quickDraft.name.trim() || !Number.isFinite(quickPriceValue) || quickPriceValue <= 0
+
   return (
     <div className="products-page">
       <div className="page-header">
@@ -325,7 +687,7 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
           <AppButton onClick={() => loadData(false)} variant="secondary" size="sm">
             Refresh
           </AppButton>
-          <AppButton onClick={() => setShowAddProduct(true)} className="btn-add" variant="primary">
+          <AppButton onClick={openAddProductModal} className="btn-add" variant="primary">
             + Add Product
           </AppButton>
         </div>
@@ -343,76 +705,224 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
 
       {/* ── Add Product Modal ── */}
       {showAddProduct && (
-        <div className="modal-overlay" onClick={() => setShowAddProduct(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={closeAddProductModal}>
+          <div
+            className="modal"
+            onClick={e => e.stopPropagation()}
+            style={addProductMode === 'quick' ? { width: 'min(720px, 95vw)' } : undefined}
+          >
             <h3>Add Product</h3>
 
-            <div className="form-group">
-              <label>Product name *</label>
-              <input
-                type="text"
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                placeholder="e.g. Hoodie"
-                autoFocus
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Price (Rs.) *</label>
-              <input
-                type="number"
-                value={newPrice}
-                onChange={e => setNewPrice(e.target.value)}
-                placeholder="e.g. 2200"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>
-                Keywords / alternate names
-                <span style={{ fontWeight: 400, color: '#888', fontSize: 12, marginLeft: 6 }}>
-                  (AI uses these to match customer messages)
-                </span>
-              </label>
-              <input
-                type="text"
-                value={newKeywords}
-                onChange={e => setNewKeywords(e.target.value)}
-                placeholder="e.g. hoodie, jacket, kapada, tyo kapada"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>
-                Quality / fabric notes
-                <span style={{ fontWeight: 400, color: '#888', fontSize: 12, marginLeft: 6 }}>
-                  (AI uses this to answer quality questions)
-                </span>
-              </label>
-              <textarea
-                value={newNotes}
-                onChange={e => setNewNotes(e.target.value)}
-                placeholder="e.g. 100% cotton, machine wash cold, does not fade"
-                rows={3}
-                style={{ width: '100%', resize: 'vertical' }}
-              />
-            </div>
-
-            <div className="modal-buttons">
-              <AppButton onClick={() => setShowAddProduct(false)} className="btn-cancel" variant="secondary">
-                Cancel
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <AppButton
+                onClick={() => {
+                  setAddProductMode('quick')
+                  setQuickParseError('')
+                }}
+                size="sm"
+                variant={addProductMode === 'quick' ? 'primary' : 'secondary'}
+              >
+                Quick add
               </AppButton>
               <AppButton
-                onClick={handleAddProduct}
-                className="btn-primary"
-                disabled={!newName.trim() || !newPrice}
-                loading={addingProduct}
-                loadingText="Adding..."
+                onClick={() => {
+                  setAddProductMode('manual')
+                  setQuickParseError('')
+                }}
+                size="sm"
+                variant={addProductMode === 'manual' ? 'primary' : 'secondary'}
               >
-                Add Product
+                Manual
               </AppButton>
             </div>
+
+            {addProductMode === 'quick' ? (
+              <>
+                <div className="form-group">
+                  <label>Quick input *</label>
+                  <textarea
+                    value={quickAddRaw}
+                    onChange={(event) => setQuickAddRaw(event.target.value)}
+                    placeholder="hoodie, black, white, green, m, l, xl, rs 1200"
+                    rows={3}
+                    style={{ width: '100%', resize: 'vertical' }}
+                    autoFocus
+                  />
+                  <div style={{ fontSize: 12, color: '#777', marginTop: 6 }}>
+                    Paste one line and parse. You can edit everything before saving.
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <AppButton
+                    onClick={handleParseQuickAdd}
+                    size="sm"
+                    className="btn-primary"
+                    disabled={!quickAddRaw.trim() || addingProduct}
+                  >
+                    Parse input
+                  </AppButton>
+                  <AppButton
+                    onClick={resetQuickAddForm}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    Reset
+                  </AppButton>
+                </div>
+
+                {quickParseError ? (
+                  <AppAlert type="warning" title="Quick add check">
+                    {quickParseError}
+                  </AppAlert>
+                ) : null}
+
+                {quickParsed ? (
+                  <>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                        gap: 10,
+                      }}
+                    >
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label>Product name *</label>
+                        <input
+                          type="text"
+                          value={quickDraft.name}
+                          onChange={(event) => updateQuickDraftField('name', event.target.value)}
+                          placeholder="e.g. Hoodie"
+                        />
+                      </div>
+
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label>Price (Rs.) *</label>
+                        <input
+                          type="number"
+                          value={quickDraft.price}
+                          onChange={(event) => updateQuickDraftField('price', event.target.value)}
+                          placeholder="e.g. 1200"
+                        />
+                      </div>
+
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label>Colors (comma separated)</label>
+                        <input
+                          type="text"
+                          value={quickDraft.colors}
+                          onChange={(event) => updateQuickDraftField('colors', event.target.value)}
+                          placeholder="e.g. Black, White, Green"
+                        />
+                      </div>
+
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label>Sizes (comma separated)</label>
+                        <input
+                          type="text"
+                          value={quickDraft.sizes}
+                          onChange={(event) => updateQuickDraftField('sizes', event.target.value)}
+                          placeholder="e.g. M, L, XL"
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>
+                      Preview: {quickPreviewVariantsCount} variants from colors x sizes. Keywords and notes can be added later in Manual mode.
+                    </div>
+                  </>
+                ) : null}
+
+                <div className="modal-buttons">
+                  <AppButton onClick={closeAddProductModal} className="btn-cancel" variant="secondary">
+                    Cancel
+                  </AppButton>
+                  <AppButton
+                    onClick={handleSaveQuickAdd}
+                    className="btn-primary"
+                    disabled={quickSaveDisabled}
+                    loading={addingProduct}
+                    loadingText="Saving..."
+                  >
+                    Save Quick Add
+                  </AppButton>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="form-group">
+                  <label>Product name *</label>
+                  <input
+                    type="text"
+                    value={newName}
+                    onChange={e => setNewName(e.target.value)}
+                    placeholder="e.g. Hoodie"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Price (Rs.) *</label>
+                  <input
+                    type="number"
+                    value={newPrice}
+                    onChange={e => setNewPrice(e.target.value)}
+                    placeholder="e.g. 2200"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    Keywords / alternate names
+                    <span style={{ fontWeight: 400, color: '#888', fontSize: 12, marginLeft: 6 }}>
+                      (AI uses these to match customer messages)
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newKeywords}
+                    onChange={e => setNewKeywords(e.target.value)}
+                    placeholder="e.g. hoodie, jacket, kapada, tyo kapada"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    Quality / fabric notes
+                    <span style={{ fontWeight: 400, color: '#888', fontSize: 12, marginLeft: 6 }}>
+                      (AI uses this to answer quality questions)
+                    </span>
+                  </label>
+                  <textarea
+                    value={newNotes}
+                    onChange={e => setNewNotes(e.target.value)}
+                    placeholder="e.g. 100% cotton, machine wash cold, does not fade"
+                    rows={3}
+                    style={{ width: '100%', resize: 'vertical' }}
+                  />
+                </div>
+
+                <div className="modal-buttons">
+                  <AppButton onClick={closeAddProductModal} className="btn-cancel" variant="secondary">
+                    Cancel
+                  </AppButton>
+                  <AppButton
+                    onClick={handleAddProduct}
+                    className="btn-primary"
+                    disabled={
+                      addingProduct ||
+                      !newName.trim() ||
+                      !Number.isFinite(Number.parseFloat(newPrice)) ||
+                      Number.parseFloat(newPrice) <= 0
+                    }
+                    loading={addingProduct}
+                    loadingText="Adding..."
+                  >
+                    Add Product
+                  </AppButton>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

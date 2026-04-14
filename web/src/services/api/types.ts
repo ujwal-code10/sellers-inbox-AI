@@ -121,6 +121,7 @@ export interface SuggestReplyOptions {
   hasMedia?: boolean
   recentProducts?: string[]
   forcedProductId?: number
+  followUpContext?: boolean
 }
 
 export interface SuggestReplyResponse {

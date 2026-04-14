@@ -32,7 +32,8 @@ Help sellers respond faster to repeated first-inquiry questions (price, availabi
 - Free/Pro plan limits and eSewa billing
 
 ## Constraints
-- No product selector in AI flow (auto-match only).
+- No forced pre-selection in AI flow (auto-match first).
+- If message is unclear, quick product picks/manual selection are allowed as recovery.
 - Romanized Nepali only in reply output; no Devanagari.
 - Never use bhai/dai/didi/sir/madam; use Hajur.
 - No auto-send and no inbox control in MVP.

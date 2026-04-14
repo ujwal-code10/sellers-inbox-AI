@@ -47,10 +47,12 @@ Important:
 
 - Authentication: signup/login with HttpOnly access+refresh cookies, CSRF protection, protected routes
 - Products: name, price, keywords, notes
+- Quick Add: unstructured product input parsed into editable product + variant setup
 - Variants: color-size rows, availability toggles, bulk actions
 - Delivery zones: per-zone charge and COD settings
 - AI reply generation with tone selector
 - Product resolver + confidence scoring + decision engine + quick-pick recovery for vague messages
+- Context Memory V1: manual conversation slots with per-slot recent product context
 - Manual QR payment submission (reference + payer) with admin verification
 - eSewa initiate/verify endpoints (when configured)
 - Free/Pro limits and plan enforcement middleware
@@ -112,6 +114,11 @@ Endpoint: POST /api/ai/suggest-reply
 7. If ASK: generate short clarification.
 8. If REPLY: generate response using system prompt + structured context.
 9. incrementReplyCount updates usage_daily.
+
+Optional request hints used in current MVP:
+- forcedProduct / forcedProductId for seller-confirmed product locking
+- recentProducts for better candidate ranking
+- followUpContext for concise same-conversation follow-up behavior
 
 ## Language and Output Rules (Critical)
 
