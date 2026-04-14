@@ -67,14 +67,18 @@ Source of truth: [MASTER_SPEC.md](../MASTER_SPEC.md)
   "customerMessage": "pp",
   "tone": "friendly",
   "forcedProduct": "Blue Hoodie",
+  "forcedProductId": 12,
   "source": "DM",
   "hasMedia": false,
-  "recentProducts": ["Blue Hoodie", "Black Hoodie"]
+  "recentProducts": ["Blue Hoodie", "Black Hoodie"],
+  "followUpContext": true
 }
 ```
 - Notes:
   - `checkReplyLimit` middleware is enforced
   - `forcedProduct` hard-locks reply generation for the selected product
+  - `forcedProductId` is preferred when available (id-first selection)
+  - `followUpContext=true` marks same-slot follow-up turns so availability replies stay concise
   - For vague messages, ASK responses include quick product candidates
 - Response shape:
 ```json

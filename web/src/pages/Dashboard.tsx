@@ -28,6 +28,75 @@ import { captureClientError } from '../services/monitoring'
 
 type ReplyResult = SuggestReplyResponse
 
+interface ContextMemorySlot {
+  id: string
+  label: string
+  lastSelectedProductId?: number
+  lastSelectedProductName?: string
+  lastMessage?: string
+  updatedAt?: number
+}
+
+const CONTEXT_MEMORY_STORAGE_PREFIX = 'sellerInbox.contextMemory.v1'
+
+const DEFAULT_CONTEXT_SLOTS: ContextMemorySlot[] = [
+  { id: 'slot-a', label: 'Customer A' },
+  { id: 'slot-b', label: 'Customer B' },
+  { id: 'slot-c', label: 'Customer C' },
+]
+
+function getContextMemoryStorageKey(userId?: number): string | null {
+  if (!userId) {
+    return null
+  }
+
+  return `${CONTEXT_MEMORY_STORAGE_PREFIX}:${userId}`
+}
+
+function hasKnownProductMention(message: string, products: Product[]): boolean {
+  const normalizedMessage = message.toLowerCase()
+
+  for (const product of products) {
+    const candidateTerms = [
+      product.name,
+      ...(product.keywords ? product.keywords.split(',') : []),
+    ]
+
+    for (const candidate of candidateTerms) {
+      const normalizedCandidate = candidate.trim().toLowerCase()
+      if (normalizedCandidate.length < 3) {
+        continue
+      }
+
+      if (normalizedMessage.includes(normalizedCandidate)) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+function shouldUseSlotForcedContext(message: string): boolean {
+  const compact = message
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!compact) {
+    return false
+  }
+
+  const words = compact.split(' ').filter(Boolean)
+  const hasAmbiguousSignal =
+    /\b(pp|price|kati|rate|dam|bhau|available|stock|cha|xa|yo|yesko|esto|this)\b/.test(
+      compact
+    )
+
+  return hasAmbiguousSignal && words.length <= 5
+}
+
 export default function Dashboard() {
   const { user, logout } = useAuth()
   const { notify } = useUIFeedback()
@@ -51,6 +120,13 @@ export default function Dashboard() {
   const [orderFormCopied, setOrderFormCopied] = useState(false)
   const [showPaywall, setShowPaywall] = useState(false)
   const [paywallReason, setPaywallReason] = useState<'replies' | 'products'>('replies')
+  const [contextSlots, setContextSlots] = useState<ContextMemorySlot[]>(
+    DEFAULT_CONTEXT_SLOTS
+  )
+  const [activeContextSlotId, setActiveContextSlotId] = useState<string>(
+    DEFAULT_CONTEXT_SLOTS[0].id
+  )
+  const [contextHintMessage, setContextHintMessage] = useState('')
 
   // Product picker state
   const [products, setProducts] = useState<Product[]>([])
@@ -138,6 +214,85 @@ export default function Dashboard() {
     }
   }, [cachedPlan])
 
+  useEffect(() => {
+    const storageKey = getContextMemoryStorageKey(user?.id)
+    if (!storageKey) {
+      setContextSlots(DEFAULT_CONTEXT_SLOTS)
+      setActiveContextSlotId(DEFAULT_CONTEXT_SLOTS[0].id)
+      return
+    }
+
+    try {
+      const rawValue = localStorage.getItem(storageKey)
+      if (!rawValue) {
+        setContextSlots(DEFAULT_CONTEXT_SLOTS)
+        setActiveContextSlotId(DEFAULT_CONTEXT_SLOTS[0].id)
+        return
+      }
+
+      const parsed = JSON.parse(rawValue) as {
+        activeSlotId?: string
+        slots?: Array<Partial<ContextMemorySlot>>
+      }
+
+      const slotsById = new Map(
+        (parsed.slots || [])
+          .filter((slot): slot is Partial<ContextMemorySlot> & { id: string } => {
+            return typeof slot?.id === 'string'
+          })
+          .map((slot) => [slot.id, slot])
+      )
+
+      const hydratedSlots = DEFAULT_CONTEXT_SLOTS.map((slot) => {
+        const stored = slotsById.get(slot.id)
+        if (!stored) {
+          return slot
+        }
+
+        return {
+          ...slot,
+          lastSelectedProductId:
+            typeof stored.lastSelectedProductId === 'number'
+              ? stored.lastSelectedProductId
+              : undefined,
+          lastSelectedProductName:
+            typeof stored.lastSelectedProductName === 'string'
+              ? stored.lastSelectedProductName
+              : undefined,
+          lastMessage:
+            typeof stored.lastMessage === 'string' ? stored.lastMessage : undefined,
+          updatedAt:
+            typeof stored.updatedAt === 'number' ? stored.updatedAt : undefined,
+        }
+      })
+
+      setContextSlots(hydratedSlots)
+
+      const parsedActiveSlotId =
+        typeof parsed.activeSlotId === 'string' ? parsed.activeSlotId : DEFAULT_CONTEXT_SLOTS[0].id
+      const activeExists = hydratedSlots.some((slot) => slot.id === parsedActiveSlotId)
+      setActiveContextSlotId(activeExists ? parsedActiveSlotId : DEFAULT_CONTEXT_SLOTS[0].id)
+    } catch {
+      setContextSlots(DEFAULT_CONTEXT_SLOTS)
+      setActiveContextSlotId(DEFAULT_CONTEXT_SLOTS[0].id)
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    const storageKey = getContextMemoryStorageKey(user?.id)
+    if (!storageKey) {
+      return
+    }
+
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        activeSlotId: activeContextSlotId,
+        slots: contextSlots,
+      })
+    )
+  }, [contextSlots, activeContextSlotId, user?.id])
+
   const loadProducts = async () => {
     if (cachedProducts !== null) {
       setProducts(cachedProducts)
@@ -187,6 +342,25 @@ export default function Dashboard() {
 
   const productByName = new Map(products.map((product) => [product.name.toLowerCase(), product]))
 
+  const activeContextSlot =
+    contextSlots.find((slot) => slot.id === activeContextSlotId) ?? contextSlots[0]
+
+  const updateActiveContextSlot = (patch: Partial<ContextMemorySlot>) => {
+    setContextSlots((previous) =>
+      previous.map((slot) => {
+        if (slot.id !== activeContextSlotId) {
+          return slot
+        }
+
+        return {
+          ...slot,
+          ...patch,
+          updatedAt: Date.now(),
+        }
+      })
+    )
+  }
+
   const quickPickProducts = (result?.decision.productCandidates || [])
     .map((name) => productByName.get(name.toLowerCase()))
     .filter((product): product is Product => Boolean(product))
@@ -207,10 +381,17 @@ export default function Dashboard() {
   const handleProductSelect = async (product: Product) => {
     if (!customerMessage.trim()) return
 
+    const trimmedMessage = customerMessage.trim()
+    const isFollowUpTurn = Boolean(
+      activeContextSlot?.lastMessage?.trim() || result?.decision.action === 'ASK'
+    )
+
     logAiSelectionDebug('manual_product_selected', {
       selectedProductId: product.id,
       selectedProductName: product.name,
-      messagePreview: customerMessage.trim().slice(0, 120),
+      messagePreview: trimmedMessage.slice(0, 120),
+      slotId: activeContextSlotId,
+      followUpContext: isFollowUpTurn,
     })
 
     setError('')
@@ -221,10 +402,13 @@ export default function Dashboard() {
 
     try {
       const response = await aiApi.suggestReply(
-        customerMessage.trim(),
+        trimmedMessage,
         undefined,
         product.name,
-        { forcedProductId: product.id }
+        {
+          forcedProductId: product.id,
+          followUpContext: isFollowUpTurn,
+        }
       )
 
       logAiSelectionDebug('manual_selection_response', {
@@ -238,6 +422,12 @@ export default function Dashboard() {
 
       setResult(response)
       addRecentProduct(product.name)
+      updateActiveContextSlot({
+        lastSelectedProductId: product.id,
+        lastSelectedProductName: product.name,
+        lastMessage: trimmedMessage,
+      })
+      setContextHintMessage(`Saved context in ${activeContextSlot?.label || 'selected slot'}: ${product.name}`)
       notify({
         type: 'success',
         title: 'Reply refreshed with selected product',
@@ -280,21 +470,56 @@ export default function Dashboard() {
     setShowProductPicker(false)
     setShowProductSearch(false)
 
+    const trimmedMessage = customerMessage.trim()
+    const isFollowUpTurn = Boolean(activeContextSlot?.lastMessage?.trim())
+    const slotProductId = activeContextSlot?.lastSelectedProductId
+    const slotProductName = activeContextSlot?.lastSelectedProductName?.trim()
+    const hasKnownMention = hasKnownProductMention(trimmedMessage, products)
+    const shouldForceFromSlot =
+      Boolean(slotProductId && slotProductName) &&
+      shouldUseSlotForcedContext(trimmedMessage) &&
+      !hasKnownMention
+
+    const recentWithSlot = [slotProductName, ...recentProductNames]
+      .filter((name): name is string => Boolean(name && name.trim()))
+      .filter((name, index, all) => {
+        return all.findIndex((entry) => entry.toLowerCase() === name.toLowerCase()) === index
+      })
+      .slice(0, 10)
+
+    updateActiveContextSlot({ lastMessage: trimmedMessage })
+
+    if (shouldForceFromSlot && slotProductName) {
+      setContextHintMessage(
+        `Using ${activeContextSlot?.label || 'selected slot'} context: ${slotProductName}`
+      )
+    } else {
+      setContextHintMessage('')
+    }
+
     logAiSelectionDebug('generate_requested', {
-      messagePreview: customerMessage.trim().slice(0, 120),
+      messagePreview: trimmedMessage.slice(0, 120),
       source: 'DM',
-      recentProducts: recentProductNames,
+      recentProducts: recentWithSlot,
       productCount: products.length,
+      slotId: activeContextSlotId,
+      slotProductId: slotProductId || null,
+      slotProductName: slotProductName || null,
+      shouldForceFromSlot,
+      hasKnownMention,
+      followUpContext: isFollowUpTurn,
     })
 
     try {
       const response = await aiApi.suggestReply(
-        customerMessage.trim(),
+        trimmedMessage,
         undefined,
-        undefined,
+        shouldForceFromSlot ? slotProductName : undefined,
         {
+          forcedProductId: shouldForceFromSlot ? slotProductId : undefined,
           source: 'DM',
-          recentProducts: recentProductNames,
+          recentProducts: recentWithSlot,
+          followUpContext: isFollowUpTurn,
         }
       )
 
@@ -309,6 +534,13 @@ export default function Dashboard() {
       setResult(response)
       if (response.decision.matchedProduct) {
         addRecentProduct(response.decision.matchedProduct)
+
+        const matchedProduct = productByName.get(response.decision.matchedProduct.toLowerCase())
+        updateActiveContextSlot({
+          lastSelectedProductId: matchedProduct?.id,
+          lastSelectedProductName: response.decision.matchedProduct,
+          lastMessage: trimmedMessage,
+        })
       }
       // Show product picker if AI asks for clarification
       if (response.decision.action === 'ASK') {
@@ -383,6 +615,25 @@ export default function Dashboard() {
     setShowProductPicker(false)
     setShowProductSearch(false)
     setProductSearch('')
+    setContextHintMessage('')
+  }
+
+  const handleSelectContextSlot = (slotId: string) => {
+    setActiveContextSlotId(slotId)
+    setShowProductPicker(false)
+    setShowProductSearch(false)
+    setProductSearch('')
+    setContextHintMessage('')
+  }
+
+  const handleClearActiveContext = () => {
+    updateActiveContextSlot({
+      lastSelectedProductId: undefined,
+      lastSelectedProductName: undefined,
+      lastMessage: undefined,
+    })
+    setContextHintMessage('')
+    notify({ type: 'success', title: 'Context cleared', message: 'Active slot context has been reset.' })
   }
 
   const handleCopyOrderForm = async () => {
@@ -485,6 +736,7 @@ Location/Address:`
                 onCustomerMessageChange={(value) => {
                   setCustomerMessage(value)
                   setShowProductPicker(false)
+                  setContextHintMessage('')
                 }}
                 loading={loading}
                 onGenerate={handleGenerate}
@@ -506,6 +758,12 @@ Location/Address:`
                 browseProducts={browseProducts}
                 productsCount={products.length}
                 onProductSelect={handleProductSelect}
+                contextSlots={contextSlots}
+                activeContextSlotId={activeContextSlotId}
+                activeContextProductName={activeContextSlot?.lastSelectedProductName}
+                contextHintMessage={contextHintMessage}
+                onSelectContextSlot={handleSelectContextSlot}
+                onClearContext={handleClearActiveContext}
                 onCancelPicker={() => {
                   setShowProductPicker(false)
                   setShowProductSearch(false)

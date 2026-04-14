@@ -135,6 +135,7 @@ Smart Reply Assistant helps small Nepali Instagram and WhatsApp sellers generate
 - [x] Auth (signup/login/refresh/logout) with cookie sessions + CSRF
 - [x] Products (name, price, keywords, notes)
 - [x] Variant grid generator (colors × sizes → individual rows)
+- [x] Quick Add parser (unstructured product input → editable structured preview)
 - [x] Instant variant stock toggle (optimistic update)
 - [x] Bulk variant actions (mark all in/out of stock)
 - [x] Delivery zone management (per-zone pricing + COD)
@@ -143,6 +144,7 @@ Smart Reply Assistant helps small Nepali Instagram and WhatsApp sellers generate
 - [x] Auto product matching (name + keywords)
 - [x] Smart clarification for ambiguous messages
 - [x] Decision engine (productResolver + confidence + decisionEngine + quick product picks)
+- [x] Context Memory V1 (manual conversation slots + per-slot recent product context)
 - [x] Stock status badge
 - [x] Manual QR payment submit + admin verification
 - [x] eSewa payment endpoints (config dependent)
@@ -413,16 +415,17 @@ incrementReplyCount:
 
 ```
 POST /api/ai/suggest-reply
-  Request body: { customerMessage, tone?, forcedProduct? }
+  Request body: { customerMessage, tone?, forcedProduct?, forcedProductId?, source?, hasMedia?, recentProducts?, followUpContext? }
 
   1. checkReplyLimit middleware
   2. Fetch products + variants + delivery zones
-  3. Optional forcedProduct parameter:
-     - If forcedProduct provided in request body
-     - Skip resolveProductContext()
-     - Use forcedProduct as matchedProduct directly
+    3. Optional forced selection/context hints:
+      - If forcedProduct/forcedProductId provided in request body
+      - Skip resolveProductContext()
+      - Use forced product as matchedProduct directly
      - Set productKnown: true
      - Proceed directly to Groq reply generation
+      - followUpContext can be used to enforce concise same-conversation follow-up behavior
   4. Normal flow (if no forcedProduct):
      - resolveProductContext() → productKnown + matchedProduct
      - detectIntent() → PRICE|AVAILABILITY|DELIVERY|COD|GENERAL
@@ -557,7 +560,7 @@ CREATE INDEX idx_usage_daily_user_date ON usage_daily(user_id, date);
 | GET/POST/PATCH/DELETE | `/delivery-zones` | full CRUD, ownership enforced |
 
 ### 7.6 AI (`/api/ai`)
-| POST | `/ai/suggest-reply` | `{ customerMessage, tone? }` — checkReplyLimit applied |
+| POST | `/ai/suggest-reply` | `{ customerMessage, tone?, forcedProduct?, forcedProductId?, source?, hasMedia?, recentProducts?, followUpContext? }` — checkReplyLimit applied |
 
 ### 7.7 Payments (`/api/payments`)
 | GET | `/payments/plans` | current plan + usage + pricing |
@@ -582,9 +585,9 @@ CREATE INDEX idx_usage_daily_user_date ON usage_daily(user_id, date);
 | Rule | Trigger | Style |
 |---|---|---|
 | 1 | Price only | Price only, no emoji |
-| 2 | Specific variant available | "Cha hajur 😊" + variant + price |
+| 2 | Specific variant available | Confirm variant; include price only if price asked in same message |
 | 3 | Variant unavailable, others exist | State unavailable + list available |
-| 4 | General availability | "Cha hajur 😊" or sold out |
+| 4 | General availability | Confirm available/sold-out; include price only if price asked in same message |
 | 5 | Delivery asked | All zones with exact prices |
 | 6 | COD asked | Available or not |
 | 7 | Greeting only | "Hajur 😊" only |
@@ -605,6 +608,7 @@ temperature: 0.3
 ### 8.5 Language Rules
 - "Cha hajur 😊" → availability confirm ONLY
 - "Hajur 😊" → greeting ONLY
+- Follow-up context can switch to concise availability replies without "Cha hajur"
 - NEVER bhai/dai/didi/sir/madam
 - NEVER Devanagari
 
@@ -770,7 +774,7 @@ Rules:
 1. **No Prisma** — raw `pg` Pool
 2. **Groq not OpenAI** — `groq-sdk`, `llama-3.3-70b-versatile`
 3. **ESM imports** — `.js` extensions required
-4. **No product selector** — AI auto-matches
+4. **No forced pre-selection** — AI auto-matches first, picker only for recovery
 5. **Romanized Nepali only** — never Devanagari
 6. **Never bhai/dai/didi** — always "Hajur"
 7. **Variants = individual rows** — one color + one size only

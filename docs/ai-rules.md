@@ -25,7 +25,9 @@ Generate safe, accurate, human-sounding reply suggestions for Nepali sellers, wh
 
 ## Reply Style Rules (MVP)
 - Price-only query: return only price (no emoji).
-- Availability confirmed: use Cha hajur 😊 and include variant + price.
+- Availability confirmed: use Cha hajur 😊 and confirm variant/stock.
+- Include price only when customer explicitly asks price in the same message.
+- Follow-up availability message: avoid Cha hajur and keep response focused to asked attribute only (size-only -> size answer, color-only -> color answer).
 - Greeting-only: use Hajur 😊 style greeting.
 - Delivery query: include all delivery zones with exact prices from data.
 - COD query: answer only from configured COD data.

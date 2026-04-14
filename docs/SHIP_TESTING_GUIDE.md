@@ -64,6 +64,18 @@ Expected:
 - Proper paywall messages.
 - No silent failures.
 
+### H. Context Memory V1 (Follow-up Behavior)
+1. In Customer A slot, ask: `pp` and select a product.
+2. In same slot, ask follow-up: `s size ma cha`.
+3. In same slot, ask: `blue color ma cha`.
+4. In same slot, ask combo: `blue color ma cha, price kati`.
+Expected:
+- Follow-up availability replies stay concise.
+- Follow-up availability does not force `Cha hajur`.
+- Size-only question should focus on size (not list all colors).
+- Color-only question should focus on color (not list all sizes).
+- Combo availability + price can include both availability and price.
+
 ## 3. Payment QA (Manual QR)
 
 ### Seller-side
@@ -123,3 +135,9 @@ Expected:
 2. Track payment pending queue time.
 3. Track seller drop-offs during product setup.
 4. Add products gradually based on real inquiries, not full catalog migration.
+5. Track reply edit pattern for prompt tuning:
+- Did seller send reply as-is?
+- Did seller add price?
+- Did seller remove price?
+- Did seller add variant detail?
+- Did seller shorten long reply?

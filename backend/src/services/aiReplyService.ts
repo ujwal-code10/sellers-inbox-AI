@@ -148,8 +148,190 @@ IMPORTANT: Only mention delivery if customer asks. Use the exact zone names abov
   return "No delivery info available. If customer asks about delivery, say \"Delivery charge area anusar lagcha.\"";
 }
 
+function hasPriceSignal(message: string): boolean {
+  const compact = message
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!compact) {
+    return false;
+  }
+
+  const priceSignals = [
+    "pp",
+    "p p",
+    "price",
+    "price please",
+    "price pls",
+    "rate",
+    "last price",
+    "best price",
+    "cost",
+    "kati",
+    "dam",
+    "bhau",
+  ];
+
+  return priceSignals.some((signal) => compact.includes(signal));
+}
+
+function hasAvailabilitySignal(message: string): boolean {
+  const lowerMsg = message.toLowerCase();
+
+  return (
+    lowerMsg.includes("available") ||
+    lowerMsg.includes("stock") ||
+    /\bxa\b/.test(lowerMsg) ||
+    /\bcha\b/.test(lowerMsg) ||
+    lowerMsg.includes("pauincha") ||
+    lowerMsg.includes("milcha")
+  );
+}
+
+function normalizeLookupText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getUniqueVariantValues(variants: any[], key: "color" | "size"): string[] {
+  const values: string[] = [];
+  const seen = new Set<string>();
+
+  for (const variant of variants) {
+    const rawValue = String(variant?.[key] ?? "").trim();
+    if (!rawValue) {
+      continue;
+    }
+
+    const normalized = rawValue.toLowerCase();
+    if (seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    values.push(rawValue);
+  }
+
+  return values;
+}
+
+function findMentionedColor(message: string, productVariants: any[]): string | undefined {
+  const normalizedMessage = normalizeLookupText(message);
+  const colors = getUniqueVariantValues(productVariants, "color").sort(
+    (a, b) => b.length - a.length
+  );
+
+  return colors.find((color) => {
+    const normalizedColor = normalizeLookupText(color);
+    return normalizedColor.length > 0 && normalizedMessage.includes(normalizedColor);
+  });
+}
+
+function findMentionedSize(message: string, productVariants: any[]): string | undefined {
+  const normalizedMessage = normalizeLookupText(message);
+  const compactMessage = normalizedMessage.replace(/\s+/g, "");
+  const sizes = getUniqueVariantValues(productVariants, "size").sort(
+    (a, b) => b.length - a.length
+  );
+
+  for (const size of sizes) {
+    const normalizedSize = normalizeLookupText(size).replace(/\s+/g, "");
+    if (!normalizedSize) {
+      continue;
+    }
+
+    if (normalizedSize.length <= 2 || /^\d+$/.test(normalizedSize)) {
+      const wordPattern = new RegExp(
+        `(?:^|\\s)${escapeRegExp(normalizedSize)}(?:\\s|$)`
+      );
+      const sizePattern = new RegExp(
+        `${escapeRegExp(normalizedSize)}\\s*size|size\\s*${escapeRegExp(
+          normalizedSize
+        )}`
+      );
+
+      if (wordPattern.test(normalizedMessage) || sizePattern.test(normalizedMessage)) {
+        return size;
+      }
+
+      continue;
+    }
+
+    const normalizedOriginalSize = normalizeLookupText(size);
+    if (
+      compactMessage.includes(normalizedSize) ||
+      (normalizedOriginalSize && normalizedMessage.includes(normalizedOriginalSize))
+    ) {
+      return size;
+    }
+  }
+
+  return undefined;
+}
+
+function buildForcedFollowUpAvailabilityReply(params: {
+  customerMessage: string;
+  product: { name: string };
+  productVariants: any[];
+}): string {
+  const { customerMessage, product, productVariants } = params;
+  const availableVariants = productVariants.filter((variant) => Boolean(variant.available));
+
+  const requestedColor = findMentionedColor(customerMessage, productVariants);
+  const requestedSize = findMentionedSize(customerMessage, productVariants);
+
+  const hasVariantMatch = (variant: any) => {
+    const sameColor =
+      !requestedColor ||
+      String(variant.color).toLowerCase() === requestedColor.toLowerCase();
+    const sameSize =
+      !requestedSize || String(variant.size).toLowerCase() === requestedSize.toLowerCase();
+    return sameColor && sameSize;
+  };
+
+  if (requestedColor && requestedSize) {
+    const requestedVariant = productVariants.find((variant) => hasVariantMatch(variant));
+    if (requestedVariant?.available) {
+      return `${requestedColor} ${requestedSize} size ma available cha.`;
+    }
+    return `${requestedColor} ${requestedSize} size aaile available chaina.`;
+  }
+
+  if (requestedColor) {
+    const hasAvailableColor = availableVariants.some((variant) => hasVariantMatch(variant));
+    return hasAvailableColor
+      ? `${requestedColor} color ma available cha.`
+      : `${requestedColor} color aaile available chaina.`;
+  }
+
+  if (requestedSize) {
+    const hasAvailableSize = availableVariants.some((variant) => hasVariantMatch(variant));
+    return hasAvailableSize
+      ? `${requestedSize} size ma available cha.`
+      : `${requestedSize} size aaile available chaina.`;
+  }
+
+  if (availableVariants.length > 0) {
+    return `${product.name} available cha.`;
+  }
+
+  return `${product.name} aaile sold out cha.`;
+}
+
 function buildContextMessage(params: {
   customerMessage: string;
+  backendIntent: SellerIntent;
+  priceAskedInMessage: boolean;
+  followUpContext: boolean;
   forcedProductInstruction: string;
   productsForPrompt: any[];
   variants: any[];
@@ -158,6 +340,18 @@ function buildContextMessage(params: {
 }): string {
   return `
 Customer Message: ${params.customerMessage}
+
+Backend Intent: ${params.backendIntent}
+Price asked in this message: ${params.priceAskedInMessage ? "YES" : "NO"}
+Conversation Stage: ${params.followUpContext ? "FOLLOW_UP" : "FIRST_MESSAGE"}
+Backend Instruction:
+- If price asked is NO, do NOT include price in the reply.
+- If intent is AVAILABILITY and price asked is NO, reply availability only.
+- Include price only when customer explicitly asked for price in the same message.
+- If conversation stage is FOLLOW_UP, do NOT use "Cha hajur 😊".
+- For follow-up availability questions, answer only what is asked.
+- If customer asks only size, do not list all colors.
+- If customer asks only color, do not list all sizes.
 
   ${params.forcedProductInstruction}
 
@@ -218,6 +412,7 @@ export async function suggestReplyForUser(params: {
     hasForcedSelection,
     forcedProductId: normalizedForcedProductId ?? null,
     forcedProductName: normalizedForcedProduct || null,
+    followUpContext: input.followUpContext,
     messagePreview: input.customerMessage.slice(0, 120),
     source: input.source,
     hasMedia: input.hasMedia,
@@ -329,6 +524,7 @@ export async function suggestReplyForUser(params: {
     }
 
     const intent = detectIntent(input.customerMessage);
+    const priceAskedInMessage = hasPriceSignal(input.customerMessage);
 
     const confidence = calculateConfidence({
       productKnown: productContext.productKnown,
@@ -353,6 +549,8 @@ export async function suggestReplyForUser(params: {
       action: finalDecision.action,
       reason: finalDecision.reason,
       intent,
+      priceAskedInMessage,
+      followUpContext: input.followUpContext,
       productKnown: productContext.productKnown,
       matchedProduct: productContext.matchedProduct ?? null,
       candidates: productContext.candidateProducts || [],
@@ -394,7 +592,10 @@ export async function suggestReplyForUser(params: {
       };
     }
 
-    if (selectedProduct && intent === "PRICE") {
+    const isPriceOnlyMessage =
+      intent === "PRICE" && !hasAvailabilitySignal(input.customerMessage);
+
+    if (selectedProduct && isPriceOnlyMessage) {
       const directReply = buildForcedPriceReply(selectedProduct);
 
       logAiSelectionDebug("forced_price_reply", {
@@ -419,6 +620,47 @@ export async function suggestReplyForUser(params: {
         decision: {
           action: "REPLY",
           reason: finalDecision.reason,
+          productKnown: true,
+          matchedProduct: selectedProduct.name,
+          intent,
+          productCandidates: [selectedProduct.name],
+        },
+      };
+    }
+
+    if (selectedProduct && input.followUpContext && intent === "AVAILABILITY") {
+      const selectedProductVariants = variants.filter(
+        (variant: any) => Number(variant.product_id) === Number(selectedProduct.id)
+      );
+
+      const directReply = buildForcedFollowUpAvailabilityReply({
+        customerMessage: input.customerMessage,
+        product: selectedProduct,
+        productVariants: selectedProductVariants,
+      });
+
+      logAiSelectionDebug("forced_followup_availability_reply", {
+        userId,
+        selectedProductId: Number(selectedProduct.id),
+        selectedProductName: selectedProduct.name,
+        replyPreview: directReply,
+      });
+
+      await incrementReplyCount(userId);
+      await logAIUsage({
+        userId,
+        requestType: "suggest_reply",
+        inputTokens: 0,
+        outputTokens: 0,
+        latencyMs: 0,
+        status: "success",
+      });
+
+      return {
+        suggestions: [directReply],
+        decision: {
+          action: "REPLY",
+          reason: `${finalDecision.reason} (follow-up availability concise rule)`,
           productKnown: true,
           matchedProduct: selectedProduct.name,
           intent,
@@ -464,6 +706,9 @@ export async function suggestReplyForUser(params: {
 
     const contextMessage = buildContextMessage({
       customerMessage: input.customerMessage,
+      backendIntent: intent,
+      priceAskedInMessage,
+      followUpContext: input.followUpContext,
       forcedProductInstruction,
       productsForPrompt,
       variants,

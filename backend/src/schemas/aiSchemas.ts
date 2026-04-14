@@ -83,6 +83,11 @@ export function parseSuggestReplyBody(body: unknown): SuggestReplyInput {
     throw new AISchemaError("recentProducts must be an array of product names");
   }
 
+  const followUpContext = body.followUpContext;
+  if (followUpContext !== undefined && typeof followUpContext !== "boolean") {
+    throw new AISchemaError("followUpContext must be true or false");
+  }
+
   return {
     customerMessage,
     tone: typeof tone === "string" ? tone : undefined,
@@ -91,6 +96,7 @@ export function parseSuggestReplyBody(body: unknown): SuggestReplyInput {
       typeof forcedProductId === "number" && Number.isInteger(forcedProductId)
         ? forcedProductId
         : undefined,
+    followUpContext: followUpContext === true,
     source: toNormalizedSource(body.source),
     hasMedia: Boolean(body.hasMedia),
     recentProducts: toRecentProducts(recentProducts),
