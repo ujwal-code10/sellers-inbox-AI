@@ -76,6 +76,10 @@ export async function loginUser(
   meta: SessionRequestMeta
 ): Promise<AuthSessionResult> {
   try {
+    // SOURCE: email/password arrives from validated auth controller input.
+    // RISK: issuing sessions before ban/password checks enables unauthorized account access.
+    // PROTECTION: verify account exists, not banned, and bcrypt password matches before token issuance.
+    // RESULT: only valid active users receive access + refresh sessions.
     const user = await selectAuthUserCredentialsByEmail(input.email);
     if (!user) {
       throw new AuthServiceError("Invalid credentials", 401);
@@ -131,6 +135,10 @@ export async function rotateSellerSession(
   meta: SessionRequestMeta
 ): Promise<{ accessToken: string; refreshToken: string } | null> {
   try {
+    // SOURCE: refresh token references server-stored rotating session row.
+    // RISK: returning new access token without successful rotation weakens session revocation guarantees.
+    // PROTECTION: rotate refresh session first; issue access token only for valid rotated user session.
+    // RESULT: refresh flow remains revocable and resistant to replay.
     const rotated = await rotateRefreshSession({
       currentToken: refreshToken,
       tokenType: "user",
@@ -150,7 +158,7 @@ export async function rotateSellerSession(
       refreshToken: rotated.token,
     };
   } catch {
-    throw new AuthServiceError("Server error", 500);
+    throw new AuthServiceError("Temporary session refresh failure", 503);
   }
 }
 

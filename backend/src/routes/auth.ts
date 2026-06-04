@@ -53,6 +53,10 @@ if (debugRoutesEnabled) {
   router.get("/testsignup", (_req, res) => res.send("Auth test works"));
 }
 
+// SOURCE: auth endpoints are the entry boundary for seller identity and session state.
+// RISK: missing limiter/middleware coverage can allow brute force or unauthorized profile access.
+// PROTECTION: rate-limit public auth routes and require auth middleware for profile endpoints.
+// RESULT: only validated sessions reach protected user profile operations.
 router.post("/signup", signupRateLimiter, signupHandler);
 router.post("/login", loginRateLimiter, loginHandler);
 router.post("/forgot-password", forgotPasswordRateLimiter, forgotPasswordHandler);

@@ -22,6 +22,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function parseSignupBody(body: unknown): SignupInput {
+  // SOURCE: signup payload originates from public client form submission.
+  // RISK: weak validation allows malformed credentials into auth service/database.
+  // PROTECTION: enforce strict field presence, type, and length constraints before returning typed input.
+  // RESULT: downstream auth layers operate on normalized and bounded signup data.
   if (!isRecord(body)) {
     throw new AuthSchemaError("Invalid request body");
   }

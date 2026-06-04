@@ -23,6 +23,10 @@ export const deliveryApi = {
     price: number,
     codAvailable: boolean
   ): Promise<DeliveryZone> {
+    // SOURCE: delivery zone edits come from seller-owned shipping settings UI.
+    // RISK: malformed updates can break delivery quotes used in reply generation.
+    // PROTECTION: send explicit full zone payload and rely on backend schema validation.
+    // RESULT: delivery pricing/COD state stays consistent for downstream AI context.
     return httpClient.request<DeliveryZone>(`/delivery-zones/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ name, price, codAvailable }),

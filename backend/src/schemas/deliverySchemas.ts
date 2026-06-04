@@ -34,6 +34,16 @@ export function parseCreateDeliveryZoneBody(
     throw new DeliverySchemaError("Zone name must be 1-255 characters");
   }
 
+  const trimmedName = name.trim();
+
+  if (/^-\d+(\.\d+)?$/.test(trimmedName)) {
+    throw new DeliverySchemaError("Zone name cannot be a negative number");
+  }
+
+  if (!/[A-Za-z]/.test(trimmedName)) {
+    throw new DeliverySchemaError("Zone name must include at least one letter");
+  }
+
   if (price < 0 || price > 10000 || !isFinite(price)) {
     throw new DeliverySchemaError("Price must be between 0 and 10,000");
   }
@@ -52,6 +62,10 @@ export function parseCreateDeliveryZoneBody(
 export function parseUpdateDeliveryZoneBody(
   body: unknown
 ): DeliveryZoneUpdateInput {
+  // SOURCE: optional zone update fields come from seller delivery settings edits.
+  // RISK: accepting empty or invalid update payloads causes ambiguous no-op mutations.
+  // PROTECTION: validate field bounds/types and reject requests with no update fields.
+  // RESULT: delivery service receives meaningful, safe update instructions only.
   if (!isRecord(body)) {
     throw new DeliverySchemaError("Invalid request body");
   }
@@ -63,6 +77,18 @@ export function parseUpdateDeliveryZoneBody(
     (typeof name !== "string" || name.trim().length === 0 || name.length > 255)
   ) {
     throw new DeliverySchemaError("Zone name must be 1-255 characters");
+  }
+
+  if (name !== undefined) {
+    const trimmedName = name.trim();
+
+    if (/^-\d+(\.\d+)?$/.test(trimmedName)) {
+      throw new DeliverySchemaError("Zone name cannot be a negative number");
+    }
+
+    if (!/[A-Za-z]/.test(trimmedName)) {
+      throw new DeliverySchemaError("Zone name must include at least one letter");
+    }
   }
 
   if (

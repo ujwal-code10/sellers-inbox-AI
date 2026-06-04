@@ -44,6 +44,10 @@ export async function updateDeliveryZone(
   input: DeliveryZoneUpdateInput
 ) {
   try {
+    // SOURCE: controller passes authenticated userId and validated zone update fields.
+    // RISK: silent no-op updates can mask wrong zone id or cross-user access attempts.
+    // PROTECTION: convert empty repository update result into explicit 404 service error.
+    // RESULT: callers can distinguish not-found from successful updates.
     const updated = await updateDeliveryZoneByUser(userId, deliveryZoneId, input);
 
     if (!updated) {

@@ -25,11 +25,14 @@ export async function insertUser(params: {
 export async function selectAuthUserCredentialsByEmail(
   email: string
 ): Promise<AuthUserCredentialsRow | null> {
+  // SOURCE: email is normalized by schema layer before repository lookup.
+  // RISK: returning broad columns can leak unnecessary user data into service layer.
+  // PROTECTION: select only auth-required fields for credential verification path.
+  // RESULT: minimal data exposure while preserving login checks.
   const result = await pool.query(
     "SELECT id, name, email, password, banned_at FROM users WHERE email = $1",
     [email]
   );
-
   return (result.rows[0] as AuthUserCredentialsRow | undefined) || null;
 }
 

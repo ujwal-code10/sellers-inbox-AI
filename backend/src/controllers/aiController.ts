@@ -2,6 +2,7 @@ import { Response } from "express";
 import { AuthRequest } from "../middleware/auth.js";
 import { AISchemaError, parseSuggestReplyBody } from "../schemas/aiSchemas.js";
 import { AIServiceError, suggestReplyForUser } from "../services/aiReplyService.js";
+import { getRequestId } from "../utils/requestContext.js";
 
 function getAuthedUserId(req: AuthRequest): number | null {
   if (typeof req.userId !== "number") {
@@ -18,6 +19,10 @@ export async function suggestReplyHandler(req: AuthRequest, res: Response) {
   }
 
   try {
+    // SOURCE: request payload comes from authenticated seller dashboard API client.
+    // RISK: unvalidated payload shape can break service assumptions and produce unsafe fallbacks.
+    // PROTECTION: strict schema parse before invoking AI service orchestration.
+    // RESULT: service receives normalized, typed input with bounded fields.
     const input = parseSuggestReplyBody(req.body);
     const response = await suggestReplyForUser({ userId, input });
     return res.json(response);
@@ -26,7 +31,8 @@ export async function suggestReplyHandler(req: AuthRequest, res: Response) {
       return res.status(err.status).json({ error: err.message });
     }
 
-    console.error("AI controller error:", err);
-    return res.status(500).json({ error: "Server error" });
+    const requestId = getRequestId(req);
+    console.error("AI controller error:", { requestId, err });
+    return res.status(500).json({ error: "Server error", requestId });
   }
 }

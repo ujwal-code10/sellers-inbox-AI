@@ -8,6 +8,10 @@ export const aiApi = {
     forcedProduct?: string,
     options?: SuggestReplyOptions
   ): Promise<SuggestReplyResponse> {
+    // SOURCE: dashboard picker passes forcedProduct/forcedProductId and context hints for the active conversation.
+    // RISK: missing context fields can cause backend to fall back to ambiguous product inference.
+    // PROTECTION: include explicit forced selection and follow-up flags whenever available.
+    // RESULT: backend deterministic guards can lock replies to the seller-confirmed product.
     const body: Record<string, unknown> = { customerMessage }
 
     if (tone) body.tone = tone

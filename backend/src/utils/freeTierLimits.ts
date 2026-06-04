@@ -13,7 +13,7 @@ const TRUST_STAGE_DEFAULTS = {
 };
 
 const ENFORCED_FALLBACK = {
-  dailyReplies: 20,
+  dailyReplies: 3,
   maxProducts: 5,
 };
 

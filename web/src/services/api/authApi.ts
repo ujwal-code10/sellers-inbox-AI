@@ -5,6 +5,10 @@ import type {
   MeResponse,
 } from './types'
 
+// SOURCE: seller auth state is server-managed through HttpOnly cookies.
+// RISK: frontend token storage assumptions can drift from backend cookie-session model.
+// PROTECTION: all auth calls go through shared httpClient with credentials + CSRF behavior.
+// RESULT: auth API usage stays aligned with backend session hardening.
 export const authApi = {
   signup(name: string, email: string, password: string): Promise<AuthResponse> {
     return httpClient.request<AuthResponse>('/auth/signup', {

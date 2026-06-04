@@ -9,7 +9,20 @@ function extractErrorMessage(payload: unknown): string | null {
   return typeof maybeError === 'string' && maybeError.length > 0 ? maybeError : null
 }
 
+function extractRequestId(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') {
+    return null
+  }
+
+  const maybeRequestId = (payload as { requestId?: unknown }).requestId
+  return typeof maybeRequestId === 'string' && maybeRequestId.length > 0
+    ? maybeRequestId
+    : null
+}
+
 export class ApiHttpClient {
+  private refreshPromise: Promise<boolean> | null = null
+
   constructor(private readonly base: string) {}
 
   private getCsrfToken(): string | null {
@@ -39,16 +52,30 @@ export class ApiHttpClient {
   }
 
   private async refreshSession(): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.base}/auth/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-      })
-
-      return response.ok
-    } catch {
-      return false
+    // SOURCE: many requests can fail with 401 at the same time when access token expires.
+    // RISK: parallel refresh attempts can race and invalidate each other.
+    // PROTECTION: collapse to a single in-flight refresh promise shared by all callers.
+    // RESULT: retry flow is stable under bursty concurrent API requests.
+    if (this.refreshPromise) {
+      return this.refreshPromise
     }
+
+    this.refreshPromise = (async () => {
+      try {
+        const response = await fetch(`${this.base}/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+        })
+
+        return response.ok
+      } catch {
+        return false
+      } finally {
+        this.refreshPromise = null
+      }
+    })()
+
+    return this.refreshPromise
   }
 
   async request<T>(
@@ -87,8 +114,19 @@ export class ApiHttpClient {
 
     if (!response.ok) {
       const errorPayload = await response.json().catch(() => null)
+      const requestId = extractRequestId(errorPayload) || response.headers.get('x-request-id')
       const message = extractErrorMessage(errorPayload)
-      throw new Error(message || 'Request failed')
+
+      const error = new Error(message || 'Request failed') as Error & {
+        status?: number
+        requestId?: string
+      }
+      error.status = response.status
+      if (requestId) {
+        error.requestId = requestId
+      }
+
+      throw error
     }
 
     if (response.status === 204) {

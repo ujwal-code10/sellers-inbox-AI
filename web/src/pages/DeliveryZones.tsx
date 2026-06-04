@@ -29,6 +29,28 @@ export default function DeliveryZones({ initialData = null, onDataChange }: Deli
   const [editPrice, setEditPrice] = useState('')
   const [editCod, setEditCod] = useState(true)
 
+  const validateZoneName = (value: string) => {
+    const trimmed = value.trim()
+
+    if (!trimmed) {
+      return 'Zone name is required'
+    }
+
+    if (trimmed.length > 255) {
+      return 'Zone name must be 1-255 characters'
+    }
+
+    if (/^-\d+(\.\d+)?$/.test(trimmed)) {
+      return 'Zone name cannot be a negative number'
+    }
+
+    if (!/[A-Za-z]/.test(trimmed)) {
+      return 'Zone name must include at least one letter'
+    }
+
+    return ''
+  }
+
   useEffect(() => {
     if (initialData === null) {
       return
@@ -65,7 +87,14 @@ export default function DeliveryZones({ initialData = null, onDataChange }: Deli
   }
 
   const handleAddZone = async () => {
-    if (!newZoneName.trim() || !newZonePrice) return
+    if (!newZonePrice) return
+
+    const nameError = validateZoneName(newZoneName)
+    if (nameError) {
+      setError(nameError)
+      notify({ type: 'error', title: 'Invalid delivery zone name', message: nameError })
+      return
+    }
 
     setAddingZone(true)
     try {
@@ -99,7 +128,14 @@ export default function DeliveryZones({ initialData = null, onDataChange }: Deli
   }
 
   const handleUpdateZone = async () => {
-    if (!editingZone || !editName.trim() || !editPrice) return
+    if (!editingZone || !editPrice) return
+
+    const nameError = validateZoneName(editName)
+    if (nameError) {
+      setError(nameError)
+      notify({ type: 'error', title: 'Invalid delivery zone name', message: nameError })
+      return
+    }
 
     try {
       const updated = await deliveryApi.updateDeliveryZone(

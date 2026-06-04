@@ -38,6 +38,10 @@ export async function updateProduct(
   input: ProductUpdateInput
 ) {
   try {
+    // SOURCE: controller provides authenticated userId + target productId + validated payload.
+    // RISK: treating missing row as success hides ownership/not-found issues from caller.
+    // PROTECTION: map empty repository result to explicit 404 ProductServiceError.
+    // RESULT: caller gets deterministic not-found behavior for invalid/cross-tenant ids.
     const product = await updateProductByUser(userId, productId, input);
 
     if (!product) {

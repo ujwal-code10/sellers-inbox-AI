@@ -79,6 +79,10 @@ export async function createProductVariantsBulkHandler(
   }
 
   try {
+    // SOURCE: bulk variant payload is generated from frontend variant builder rows.
+    // RISK: duplicate/invalid bulk rows can create inconsistent inventory state.
+    // PROTECTION: validate route product id and parse bulk schema before service orchestration.
+    // RESULT: service receives bounded, structured variant batch for safe insertion.
     const productId = requireSingleParam(req.params.productId, "Product id");
     const input = parseCreateVariantsBulkBody(req.body);
     const variants = await createVariantsBulk(userId, productId, input);

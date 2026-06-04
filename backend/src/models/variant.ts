@@ -10,4 +10,5 @@ export interface VariantBulkCreateInput {
 
 export interface VariantAvailabilityUpdateInput {
   available: boolean;
+  version: number;
 }

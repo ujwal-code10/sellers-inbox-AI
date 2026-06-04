@@ -9,7 +9,6 @@ export default function PaymentSuccess() {
 
   useEffect(() => {
     const encodedData = searchParams.get('data')
-    const billingHint = localStorage.getItem('esewa_billing') || undefined
     let redirectTimer: ReturnType<typeof setTimeout> | null = null
 
     if (!encodedData) {
@@ -17,8 +16,7 @@ export default function PaymentSuccess() {
       return
     }
 
-    paymentApi.verifyEsewa(encodedData, billingHint).then(() => {
-      localStorage.removeItem('esewa_billing')
+    paymentApi.verifyEsewa(encodedData).then(() => {
       setStatus('success')
       redirectTimer = setTimeout(() => {
         navigate('/dashboard', { replace: true })

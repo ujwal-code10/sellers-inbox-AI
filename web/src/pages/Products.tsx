@@ -616,21 +616,34 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
 
   // ── Toggle variant availability — instant, no confirmation ──
   const handleToggleVariant = async (variant: Variant) => {
+    const nextAvailable = !variant.available
     // Optimistic update — change UI immediately
     setVariantsByProduct(prev => ({
       ...prev,
       [variant.product_id]: (prev[variant.product_id] || []).map(v =>
-        v.id === variant.id ? { ...v, available: !v.available } : v
+        v.id === variant.id ? { ...v, available: nextAvailable } : v
       )
     }))
     syncProductVariants(
       variant.product_id,
       (variantsByProduct[variant.product_id] || []).map(v =>
-        v.id === variant.id ? { ...v, available: !v.available } : v
+        v.id === variant.id ? { ...v, available: nextAvailable } : v
       )
     )
     try {
-      await productApi.updateVariant(variant.id, !variant.available)
+      const updated = await productApi.updateVariant(variant.id, nextAvailable, variant.version)
+      setVariantsByProduct(prev => ({
+        ...prev,
+        [variant.product_id]: (prev[variant.product_id] || []).map(v =>
+          v.id === updated.id ? { ...v, available: updated.available, version: updated.version } : v
+        )
+      }))
+      syncProductVariants(
+        variant.product_id,
+        (variantsByProduct[variant.product_id] || []).map(v =>
+          v.id === updated.id ? { ...v, available: updated.available, version: updated.version } : v
+        )
+      )
     } catch (err) {
       // Revert on failure
       setVariantsByProduct(prev => ({
@@ -645,8 +658,15 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
           v.id === variant.id ? { ...v, available: variant.available } : v
         )
       )
-      setError('Failed to update variant')
-      notify({ type: 'error', title: 'Could not update variant status' })
+      const status = err instanceof Error ? (err as Error & { status?: number }).status : undefined
+      if (status === 409 || status === 412) {
+        setError('Variant was updated in another tab. Refreshing...')
+        notify({ type: 'error', title: 'Variant updated elsewhere', message: 'Refreshing latest data.' })
+        loadData()
+      } else {
+        setError('Failed to update variant')
+        notify({ type: 'error', title: 'Could not update variant status' })
+      }
     }
   }
 
@@ -661,14 +681,33 @@ export default function Products({ initialData = null, onDataChange }: ProductsP
     }))
     syncProductVariants(productId, updatedVariants)
     try {
-      await Promise.all(variants.map(v => productApi.updateVariant(v.id, available)))
+      const results = await Promise.all(
+        variants.map(v => productApi.updateVariant(v.id, available, v.version))
+      )
+      const merged = updatedVariants.map(variant => {
+        const updated = results.find(result => result.id === variant.id)
+        return updated
+          ? { ...variant, available: updated.available, version: updated.version }
+          : variant
+      })
+      setVariantsByProduct(prev => ({
+        ...prev,
+        [productId]: merged
+      }))
+      syncProductVariants(productId, merged)
       notify({
         type: 'success',
         title: available ? 'All variants marked in stock' : 'All variants marked sold out',
       })
     } catch (err) {
-      setError('Failed to update variants')
-      notify({ type: 'error', title: 'Could not update all variants' })
+      const status = err instanceof Error ? (err as Error & { status?: number }).status : undefined
+      if (status === 409 || status === 412) {
+        setError('Variants changed in another tab. Refreshing...')
+        notify({ type: 'error', title: 'Variants updated elsewhere', message: 'Refreshing latest data.' })
+      } else {
+        setError('Failed to update variants')
+        notify({ type: 'error', title: 'Could not update all variants' })
+      }
       loadData()
     }
   }

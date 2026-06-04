@@ -2,242 +2,487 @@
 
 AI-powered reply generation for Nepali Instagram and WhatsApp sellers.
 
-This repository contains the current Web MVP, backend API, and paused Flutter app. The product helps sellers generate fast, accurate, context-aware replies while keeping full human control.
+This repository contains the Web MVP, backend API, admin panel, payment system, and supporting infrastructure. The product helps sellers generate fast, accurate, context-aware replies while keeping full human control.
 
-## Current Status
+> **Source of Truth:** `MASTER_SPEC.md`
+> When documentation conflicts, `MASTER_SPEC.md` always wins.
 
-- Master spec version: 3.1 (March 2026)
-- Web MVP: built
-- Monetization (eSewa + plans): built
-- Flutter: paused until web monetization is stable
-- Source of truth: MASTER_SPEC.md
+---
 
-## Why This Product Exists
+# Current Status
 
-Small sellers repeatedly answer the same questions:
+| Item                      | Status                                 |
+| ------------------------- | -------------------------------------- |
+| Master Spec Version       | 3.2 (June 2026)                        |
+| Web MVP                   | ✅ Built                                |
+| Backend Deployment        | ✅ Configured                           |
+| Admin Panel               | ✅ Built                                |
+| Manual QR Payments        | ✅ Live                                 |
+| eSewa Backend Integration | ✅ Built                                |
+| eSewa Checkout UI         | ❌ Not wired                            |
+| Khalti                    | ❌ Not built                            |
+| Flutter Mobile App        | ⏸ Paused until monetization stabilizes |
 
-- Price kati ho?
-- Yo color/size available cha?
-- Delivery charge kati?
-- COD cha?
+---
 
-Manual replies are slow and inconsistent. Generic AI can hallucinate stock or pricing. Smart Reply Assistant solves this by combining strict business context from database data with a decision layer that blocks low-confidence replies.
+# Product Vision
 
-## Core Product Flow
+Smart Reply Assistant helps Nepali online sellers generate fast, accurate, and consistent customer replies without manually typing the same answers repeatedly.
 
-1. Customer sends message on Instagram or WhatsApp.
-2. Seller copies the message into Smart Reply Assistant.
-3. Seller selects a tone (Friendly, Professional, Persuasive).
-4. Seller taps Generate.
-5. Backend resolves product context and confidence.
-6. System decides:
-  - REPLY: generate AI suggestion
-  - ASK: return clarification + one-tap quick product picks
-7. If needed, seller taps a suggested product and regenerates instantly.
-8. Seller copies the result and sends manually.
+Common seller questions:
+
+* Price kati ho?
+* Yo color available cha?
+* Yo size cha?
+* Delivery charge kati?
+* COD cha?
+
+Generic AI tools often hallucinate prices, stock, and delivery details. Smart Reply Assistant prevents this by combining structured seller data with a confidence-based decision engine.
+
+---
+
+# Core User Flow
+
+```text
+1. Customer sends WhatsApp/Instagram message
+2. Seller copies message
+3. Seller opens Smart Reply Assistant
+4. Seller pastes message
+5. Seller selects tone
+6. Seller clicks Generate
+7. AI attempts automatic product matching
+8. If confidence is high → reply generated
+9. If confidence is low → clarification + quick product picks shown
+10. Seller copies reply and sends manually
+```
 
 Important:
 
-- AI auto-matches product when context is clear.
-- If unclear, system asks clarification and provides quick product picks before search.
-- Search is fallback for edge cases, not the first step.
-- No auto-send in MVP.
+* No auto-send
+* AI auto-matches products first
+* Product picker is a recovery mechanism
+* Search is fallback only
+* Designed primarily for first customer inquiries
 
-## Key Features (Implemented)
+---
 
-- Authentication: signup/login with HttpOnly access+refresh cookies, CSRF protection, protected routes
-- Products: name, price, keywords, notes
-- Quick Add: unstructured product input parsed into editable product + variant setup
-- Variants: color-size rows, availability toggles, bulk actions
-- Delivery zones: per-zone charge and COD settings
-- AI reply generation with tone selector
-- Product resolver + confidence scoring + decision engine + quick-pick recovery for vague messages
-- Context Memory V1: manual conversation slots with per-slot recent product context
-- Manual QR payment submission (reference + payer) with admin verification
-- eSewa initiate/verify endpoints (when configured)
-- Free/Pro limits and plan enforcement middleware
-- Upgrade flow and paywall handling in web app
-- Admin panel with role-based access, transaction approval/rejection, settings, and admin account management
+# Features Implemented
 
-## Plan and Pricing
+## Authentication
 
-| Feature | Free | Pro |
-|---|---|---|
-| AI replies/day | 20 | Unlimited |
-| Products | 5 | Unlimited |
-| Variants | Unlimited | Unlimited |
-| Delivery zones | Unlimited | Unlimited |
+* Signup
+* Login
+* Logout
+* Refresh token rotation
+* HttpOnly access and refresh cookies
+* CSRF protection
+* Protected routes
 
-| Plan | Price |
-|---|---|
-| Free | Rs. 0/month |
-| Pro Monthly | Rs. 299/month |
-| Pro Yearly | Rs. 2,499/year |
+## Product Management
 
-## Tech Stack
+* Products
+* Keywords
+* Notes
+* Pricing
+* Quick Add parser
+* Editable product previews
 
-| Layer | Technology |
-|---|---|
-| Web | React 18 + Vite + TypeScript |
-| Mobile (paused) | Flutter 3 + Dart |
-| Backend | Node.js 20 + Express 4 + TypeScript |
-| Database | PostgreSQL 15 |
-| Data Access | Raw SQL via pg |
-| AI | groq-sdk, model llama-3.3-70b-versatile |
-| Auth | jsonwebtoken + bcryptjs |
-| Hosting | Vercel (frontend + backend serverless) + Neon PostgreSQL |
+## Variant Management
 
-## High-Level Architecture
+* Color × Size variant generation
+* Availability toggles
+* Bulk stock actions
+* Optimistic updates
+
+## Delivery Management
+
+* Delivery zones
+* Per-zone pricing
+* COD settings
+
+## AI System
+
+* AI reply generation
+* Tone selector
+* Product resolver
+* Confidence scoring
+* Decision engine
+* Product clarification flow
+* Quick product picker recovery
+* Context Memory V1
+* Follow-up context support
+
+## Payments & Monetization
+
+* Manual QR payment flow
+* Admin approval workflow
+* Subscription system
+* Free/Pro enforcement
+* Upgrade page
+* Paywall modal
+* Payment success/failure pages
+
+## Admin Panel
+
+* Admin authentication
+* Super admin roles
+* User management
+* Transaction approval/rejection
+* Subscription management
+* AI usage monitoring
+* System settings
+* Audit logging
+
+---
+
+# Plans & Pricing
+
+## Usage Limits
+
+| Feature        | Free      | Pro       |
+| -------------- | --------- | --------- |
+| AI Replies/Day | 20        | Unlimited |
+| Products       | 5         | Unlimited |
+| Variants       | Unlimited | Unlimited |
+| Delivery Zones | Unlimited | Unlimited |
+
+Limits are controlled through:
+
+```text
+system_settings.free_tier_limits
+```
+
+When enforcement is disabled, the application runs in trust mode.
+
+## Pricing
+
+| Plan        | Price          |
+| ----------- | -------------- |
+| Free        | Rs. 0/month    |
+| Pro Monthly | Rs. 299/month  |
+| Pro Yearly  | Rs. 2,499/year |
+
+---
+
+# Tech Stack
+
+| Layer            | Technology                          |
+| ---------------- | ----------------------------------- |
+| Frontend         | React 18 + Vite + TypeScript        |
+| Styling          | Custom CSS                          |
+| Mobile           | Flutter 3 + Dart (Paused)           |
+| Backend          | Node.js 20 + Express 4 + TypeScript |
+| Database         | PostgreSQL 15                       |
+| Data Access      | Raw SQL via pg                      |
+| AI               | Groq SDK                            |
+| Model            | llama-3.3-70b-versatile             |
+| Auth             | JWT + bcryptjs                      |
+| Frontend Hosting | Vercel                              |
+| Backend Hosting  | Vercel Serverless                   |
+| Database Hosting | Neon PostgreSQL                     |
+
+---
+
+# Architecture
 
 ```mermaid
 flowchart LR
-  U[Seller Web App] --> A[Backend API /api/*]
-  A --> M[Auth + Plan Middleware]
-  M --> R[Route Handlers]
-  R --> D[(PostgreSQL)]
-  R --> X[Decision Layer]
-  X --> G[Groq API]
-  G --> R
-  R --> U
+
+U[Seller Web App]
+A[Backend API]
+M[Auth + Plan Middleware]
+R[Route Handlers]
+D[(PostgreSQL)]
+X[Decision Engine]
+G[Groq API]
+
+U --> A
+A --> M
+M --> R
+R --> D
+R --> X
+X --> G
+G --> R
+R --> U
 ```
 
-## AI Decision and Safety Pipeline
+---
 
-Endpoint: POST /api/ai/suggest-reply
+# AI Reply Pipeline
 
-1. checkReplyLimit middleware validates daily quota.
-2. Backend loads product, variant, and delivery zone context.
-3. resolveProductContext detects productKnown and matchedProduct.
-4. detectIntent classifies PRICE, AVAILABILITY, DELIVERY, COD, GENERAL.
-5. calculateConfidence returns HIGH, MEDIUM, or LOW.
-6. decideReply returns REPLY or ASK.
-7. If ASK: generate short clarification.
-8. If REPLY: generate response using system prompt + structured context.
-9. incrementReplyCount updates usage_daily.
+Endpoint:
 
-Optional request hints used in current MVP:
-- forcedProduct / forcedProductId for seller-confirmed product locking
-- recentProducts for better candidate ranking
-- followUpContext for concise same-conversation follow-up behavior
+```http
+POST /api/ai/suggest-reply
+```
 
-## Language and Output Rules (Critical)
+Flow:
 
-- Romanized Nepali only, never Devanagari script.
-- Never use bhai, dai, didi, sir, madam.
-- Use respectful Hajur style.
-- Never invent price, stock, size, color, delivery fee, or COD details.
-- If uncertain, ask clarification.
+```text
+1. checkReplyLimit()
+2. Load products, variants, delivery zones
+3. Optional forcedProduct/forcedProductId
+4. resolveProductContext()
+5. detectIntent()
+6. calculateConfidence()
+7. decideReply()
 
-## Database Schema (Current)
+If ASK:
+  → clarification
+  → quick product picker
 
-Core tables:
+If REPLY:
+  → generate AI response
 
-- users
-- products
-- variants
-- delivery_zones
-- subscriptions
-- usage_daily
+8. incrementReplyCount()
+```
 
-Critical data rules:
+Supported request hints:
 
-- One variant row = one color + one size.
-- delivery_settings is removed and must not be used.
+* forcedProduct
+* forcedProductId
+* recentProducts
+* followUpContext
 
-## API Summary
+AI Configuration:
 
-Auth:
+```text
+Model: llama-3.3-70b-versatile
+Temperature: 0.3
+```
 
-- POST /api/auth/signup
-- POST /api/auth/login
-- POST /api/auth/refresh
-- POST /api/auth/logout
-- GET /api/auth/me
+---
 
-Products:
+# Language Rules
 
-- GET /api/products
-- POST /api/products
-- PATCH /api/products/:id
-- DELETE /api/products/:id
+Critical:
 
-Variants:
+* Romanized Nepali only
+* Never Devanagari
+* Always use Hajur
+* Never use:
 
-- GET /api/products/:id/variants
-- POST /api/products/:id/variants
-- PATCH /api/variants/:id
+  * bhai
+  * dai
+  * didi
+  * sir
+  * madam
+* Never invent:
 
-Delivery Zones:
+  * price
+  * stock
+  * size
+  * color
+  * delivery fee
+  * COD availability
 
-- GET /api/delivery-zones
-- POST /api/delivery-zones
-- PATCH /api/delivery-zones/:id
-- DELETE /api/delivery-zones/:id
+If uncertain, ask clarification.
 
-AI:
+---
 
-- POST /api/ai/suggest-reply
+# Database Schema
 
-Payments:
+Core Tables:
 
-- GET /api/payments/plans
-- GET /api/payments/manual-qr/config
-- GET /api/payments/manual-qr/status
-- POST /api/payments/manual-qr/submit
-- POST /api/payments/esewa/initiate
-- POST /api/payments/esewa/verify
+```text
+users
+admin_users
+auth_refresh_tokens
+products
+variants
+delivery_zones
+subscriptions
+usage_daily
+transactions
+ai_usage_logs
+system_settings
+audit_logs
+```
 
-Admin:
+Critical Rules:
 
-- POST /api/admin/auth/login
-- POST /api/admin/auth/refresh
-- POST /api/admin/auth/logout
-- GET /api/admin/auth/me
-- POST /api/admin/auth/change-password
-- POST /api/admin/auth/change-email
-- POST /api/admin/auth/create-admin (super_admin)
+```text
+One variant row = one color + one size
 
-Response conventions:
+Correct:
+Red | XL
 
-- Error format: { "error": "message" }
-- Paywall format: { "error": "...", "upgrade": true }
+Wrong:
+Red,Blue | XL
+```
 
-## Environment Variables
+`delivery_settings` has been removed permanently.
 
-Backend uses:
+Only `delivery_zones` should be used.
 
-- DATABASE_URL
-- JWT_SECRET
-- ADMIN_JWT_SECRET
-- GROQ_API_KEY
-- MANUAL_QR_IMAGE_URL
-- MANUAL_QR_RECEIVER_NAME
-- MANUAL_QR_RECEIVER_ID
-- MANUAL_QR_SUPPORT_TEXT
-- FRONTEND_URL
-- CORS_ORIGINS
-- NODE_ENV
+---
 
-Optional debug toggles:
+# API Summary
 
-- ENABLE_AI_SELECTION_DEBUG=true (backend: logs product-selection trace for suggest-reply in non-production)
-- VITE_AI_SELECTION_DEBUG=true (frontend: logs picker/generate trace in browser console)
+## Auth
 
-## Local Development Setup
+```http
+POST /api/auth/signup
+POST /api/auth/login
+POST /api/auth/refresh
+POST /api/auth/logout
+POST /api/auth/forgot-password
+GET  /api/auth/me
+PATCH /api/auth/me
+```
+
+## Products
+
+```http
+GET    /api/products
+POST   /api/products
+PATCH  /api/products/:id
+DELETE /api/products/:id
+```
+
+## Variants
+
+```http
+GET   /api/products/:id/variants
+POST  /api/products/:id/variants
+PATCH /api/variants/:id
+```
+
+## Delivery Zones
+
+```http
+GET    /api/delivery-zones
+POST   /api/delivery-zones
+PATCH  /api/delivery-zones/:id
+DELETE /api/delivery-zones/:id
+```
+
+## AI
+
+```http
+POST /api/ai/suggest-reply
+```
+
+## Payments
+
+```http
+GET  /api/payments/plans
+GET  /api/payments/manual-qr/config
+GET  /api/payments/manual-qr/status
+POST /api/payments/manual-qr/submit
+POST /api/payments/esewa/initiate
+POST /api/payments/esewa/verify
+```
+
+## Admin
+
+```http
+POST /api/admin/auth/login
+POST /api/admin/auth/refresh
+POST /api/admin/auth/logout
+GET  /api/admin/auth/me
+POST /api/admin/auth/change-password
+POST /api/admin/auth/change-email
+POST /api/admin/auth/create-admin
+```
+
+Response Conventions:
+
+```json
+{
+  "error": "message"
+}
+```
+
+Paywall:
+
+```json
+{
+  "error": "Daily limit reached",
+  "upgrade": true
+}
+```
+
+---
+
+# Security
+
+Implemented:
+
+* bcrypt password hashing
+* JWT authentication
+* HttpOnly cookies
+* CSRF protection
+* Refresh token rotation
+* Ownership validation
+* Role-based admin authentication
+* Helmet.js
+* Restricted CORS
+* Request validation
+* Rate limiting
+* Duplicate payment prevention
+* Server-side plan enforcement
+* customerMessage length protection
+
+Token Lifecycle:
+
+```text
+Access Token: 15 minutes
+Refresh Token: 14 days
+
+Admin Refresh Token:
+7 days
+```
+
+---
+
+# Environment Variables
+
+```env
+PORT
+DATABASE_URL
+JWT_SECRET
+ADMIN_JWT_SECRET
+ADMIN_EMAIL
+ADMIN_PASSWORD
+GROQ_API_KEY
+ESEWA_MERCHANT_CODE
+ESEWA_SECRET_KEY
+MANUAL_QR_IMAGE_URL
+MANUAL_QR_RECEIVER_NAME
+MANUAL_QR_RECEIVER_ID
+MANUAL_QR_SUPPORT_TEXT
+FRONTEND_URL
+CORS_ORIGINS
+ENABLE_DEBUG_ROUTES
+ENABLE_STARTUP_VERBOSE_LOGS
+NODE_ENV
+```
+
+Optional Debug:
+
+```env
+ENABLE_AI_SELECTION_DEBUG=true
+VITE_AI_SELECTION_DEBUG=true
+```
+
+---
+
+# Local Development
 
 Prerequisites:
 
-- Node.js 20+
-- Docker Desktop
+* Node.js 20+
+* Docker Desktop
 
-1. Start local PostgreSQL:
+## Start Database
 
 ```bash
 cd backend
 docker-compose up -d
 ```
 
-2. Install backend dependencies and run API:
+## Start Backend
 
 ```bash
 cd backend
@@ -245,9 +490,13 @@ npm install
 npm run dev
 ```
 
-Backend runs on http://localhost:4000
+Backend:
 
-3. Install web dependencies and run frontend:
+```text
+http://localhost:4000
+```
+
+## Start Frontend
 
 ```bash
 cd web
@@ -255,112 +504,143 @@ npm install
 npm run dev
 ```
 
-Web runs on http://localhost:3000
-
-## Build and Run (Backend)
-
-```bash
-cd backend
-npm run build
-npm start
-```
-
-Scripts:
-
-- dev: tsx watch src/server.ts
-- build: tsc
-- start: node dist/server.js
-
-## Deployment Model
-
-- Frontend: Vercel (web root)
-- Backend: Vercel serverless via api/[...path].js
-- Database: Neon PostgreSQL
-
-Production shape:
-
-- Frontend URL on Vercel
-- Backend API on Vercel serverless
-- Managed DB on Neon
-
-## Repository Structure
+Frontend:
 
 ```text
-api/
-  [...path].js               # Vercel serverless API entry
-
-backend/
-  src/
-    ai/
-    decision/
-    handlers/
-    middleware/
-    migrations/
-    product/
-    routes/
-    utils/
-    app.ts
-    server.ts
-
-web/
-  public/
-  src/
-    context/
-    pages/
-    services/
-    styles/
-
-mobile/                      # paused for now
-docs/
-MASTER_SPEC.md
+http://localhost:3000
 ```
 
-## Security and Enforcement
+---
 
-Already implemented:
+# Deployment
 
-- bcrypt password hashing
-- Cookie-based auth sessions with rotating refresh tokens
-- CSRF validation for cookie-authenticated unsafe methods
-- Role-based admin auth (admin/super_admin)
-- Login and payment submission rate limiting
-- Restricted CORS + helmet + cookie parser hardening
-- customerMessage length guard
-- Duplicate manual QR reference prevention
-- Server-side Free/Pro enforcement
+| Service  | Platform          |
+| -------- | ----------------- |
+| Frontend | Vercel            |
+| Backend  | Vercel Serverless |
+| Database | Neon PostgreSQL   |
 
-## Known Issues
+Production Stack:
 
-- Flutter app contains hardcoded JWT/IP and is paused.
-- Khalti payment is not built yet.
-- Some production hardening tasks are planned for next phase.
+```text
+Frontend
+  ↓
+Vercel
 
-## Roadmap
+Backend
+  ↓
+Vercel Serverless
 
-Phase 1: Web MVP complete
+Database
+  ↓
+Neon PostgreSQL
+```
 
-Phase 2: Monetization built (deploying and production checks)
+---
 
-Phase 3: Polish
+# Monitoring
 
-- Khalti
-- Tailwind migration
-- templates, observability, validation, rate limiting
+Available:
 
-Phase 4: Resume Flutter and reach feature parity
+```text
+/health
+/api/debug
+Vercel Logs
+console.error()
+```
 
-Phase 5: Deeper integrations and automation safeguards
+Future:
 
-## Additional Docs
+* Sentry
+* PostHog
+* Winston
 
-- MASTER_SPEC.md
-- docs/ai-rules.md
-- docs/API_contract.md
-- docs/MVP_DECISION_RULES.md
-- docs/SHIP_TESTING_GUIDE.md
-- docs/product_context.md
+---
 
-When documentation conflicts, MASTER_SPEC.md wins.
+# Known Issues
+
+| Issue                             | Status  |
+| --------------------------------- | ------- |
+| Flutter contains hardcoded JWT/IP | Open    |
+| eSewa checkout UI not wired       | Open    |
+| Khalti not implemented            | Open    |
+| No Sentry integration             | Planned |
+
+---
+
+# Roadmap
+
+## Phase 1
+
+✅ Web MVP
+
+## Phase 2
+
+✅ Monetization Built
+
+Remaining:
+
+* eSewa production testing
+* Khalti
+* Real seller testing
+
+## Phase 3
+
+* Tailwind migration
+* Reply templates
+* Sentry
+* PostHog
+* Additional rate limiting
+
+## Phase 4
+
+* Resume Flutter
+* Feature parity
+
+## Phase 5
+
+* WhatsApp integration
+* Instagram integration
+* Team accounts
+* Automation safeguards
+
+---
+
+# Critical Development Rules
+
+Never Forget:
+
+1. No Prisma — use raw pg
+2. Groq, not OpenAI
+3. Model = llama-3.3-70b-versatile
+4. ESM imports require .js extensions
+5. AI auto-matches products first
+6. Romanized Nepali only
+7. Never use bhai/dai/didi
+8. Variants = one color + one size
+9. delivery_settings is removed
+10. Cookie-based auth + CSRF
+11. Neon requires SSL
+12. Manual QR is primary payment path
+13. Frontend = Vercel
+14. Backend = Vercel Serverless
+15. Database = Neon PostgreSQL
+16. Route file is payment.ts (not payments.ts)
+
+---
+
+# Additional Documentation
+
+```text
+MASTER_SPEC.md
+docs/ai-rules.md
+docs/API_contract.md
+docs/MVP_DECISION_RULES.md
+docs/SHIP_TESTING_GUIDE.md
+docs/product_context.md
+```
+
+When documentation conflicts, `MASTER_SPEC.md` wins.
 
 
 

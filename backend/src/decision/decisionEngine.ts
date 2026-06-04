@@ -11,6 +11,7 @@ export type Intent =
   | "UNKNOWN";
 
 export type Confidence = "HIGH" | "MEDIUM" | "LOW";
+export type MessageComplexity = "SHORT" | "MEDIUM_OR_COMPLEX";
 
 export type DecisionAction = "REPLY" | "ASK" | "SKIP";
 
@@ -18,6 +19,7 @@ interface DecisionInput {
   intent: Intent;
   productKnown: boolean;
   confidence: Confidence;
+  messageComplexity?: MessageComplexity;
 }
 
 interface DecisionOutput {
@@ -28,10 +30,14 @@ interface DecisionOutput {
 export function decideReply(
   input: DecisionInput
 ): DecisionOutput {
-  const { intent, productKnown, confidence } = input;
+  const {
+    intent,
+    productKnown,
+    confidence,
+    messageComplexity = "MEDIUM_OR_COMPLEX",
+  } = input;
 
-  // Rule 1: Unknown intent AND product not known → ask
-  // But if product IS known, we can still attempt to reply
+  // Unknown intent with unknown product needs clarification first.
   if (intent === "UNKNOWN" && !productKnown) {
     return {
       action: "ASK",
@@ -39,7 +45,7 @@ export function decideReply(
     };
   }
 
-  // Rule 2: Delivery questions don't require product context → always reply
+  // Delivery/COD/Greetings can reply without product context.
   if (intent === "DELIVERY") {
     return {
       action: "REPLY",
@@ -63,7 +69,7 @@ export function decideReply(
     };
   }
 
-  // Rule 3: General greetings don't require product context → always reply
+  // Greetings can stay lightweight.
   if (intent === "GENERAL") {
     return {
       action: "REPLY",
@@ -71,7 +77,7 @@ export function decideReply(
     };
   }
 
-  // Rule 4: Product not identified → ask
+  // Product-dependent replies require known product.
   if (!productKnown) {
     return {
       action: "ASK",
@@ -79,7 +85,7 @@ export function decideReply(
     };
   }
 
-  // Rule 5: Low confidence → ask
+  // Low confidence should ask before risking a wrong reply.
   if (confidence === "LOW") {
     return {
       action: "ASK",
@@ -87,7 +93,17 @@ export function decideReply(
     };
   }
 
-  // Rule 6: Safe to reply (product is known, intent is clear or product name gives context)
+  // Short seller-chat messages should stay concise and direct.
+  if (
+    messageComplexity === "SHORT" &&
+    (intent === "PRICE" || intent === "AVAILABILITY" || intent === "DETAILS")
+  ) {
+    return {
+      action: "REPLY",
+      reason: "Short message; concise direct reply preferred",
+    };
+  }
+
   return {
     action: "REPLY",
     reason: "Intent and product are clear",

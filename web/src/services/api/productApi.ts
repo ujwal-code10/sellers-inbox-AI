@@ -50,16 +50,20 @@ export const productApi = {
     productId: number,
     variants: BulkVariantCreatePayload[]
   ): Promise<Variant[]> {
+    // SOURCE: variants array is assembled from seller product setup inputs.
+    // RISK: sequential per-variant requests are slower and increase partial-failure risk.
+    // PROTECTION: submit one validated bulk payload through backend bulk endpoint.
+    // RESULT: faster setup and more consistent variant persistence behavior.
     return httpClient.request<Variant[]>(`/products/${productId}/variants/bulk`, {
       method: 'POST',
       body: JSON.stringify({ variants }),
     })
   },
 
-  updateVariant(variantId: number, available: boolean): Promise<Variant> {
+  updateVariant(variantId: number, available: boolean, version: number): Promise<Variant> {
     return httpClient.request<Variant>(`/variants/${variantId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ available }),
+      body: JSON.stringify({ available, version }),
     })
   },
 }

@@ -26,18 +26,20 @@ import {
   signupUser,
   updateUserName,
 } from "../services/authService.js";
+import { getRequestId } from "../utils/requestContext.js";
 
 function getAuthedUserId(req: AuthRequest): number | null {
   return typeof req.userId === "number" ? req.userId : null;
 }
 
-function mapError(res: Response, err: unknown, logPrefix: string) {
+function mapError(req: AuthRequest, res: Response, err: unknown, logPrefix: string) {
   if (err instanceof AuthSchemaError || err instanceof AuthServiceError) {
     return res.status(err.status).json({ error: err.message });
   }
 
-  console.error(logPrefix, err);
-  return res.status(500).json({ error: "Server error" });
+  const requestId = getRequestId(req);
+  console.error(logPrefix, { requestId, err });
+  return res.status(500).json({ error: "Server error", requestId });
 }
 
 export async function signupHandler(req: AuthRequest, res: Response) {
@@ -53,7 +55,7 @@ export async function signupHandler(req: AuthRequest, res: Response) {
 
     return res.status(201).json({ user: result.user });
   } catch (err) {
-    return mapError(res, err, "Signup error:");
+    return mapError(req, res, err, "Signup error:");
   }
 }
 
@@ -70,7 +72,7 @@ export async function loginHandler(req: AuthRequest, res: Response) {
 
     return res.json({ user: result.user });
   } catch (err) {
-    return mapError(res, err, "Login error:");
+    return mapError(req, res, err, "Login error:");
   }
 }
 
@@ -84,11 +86,15 @@ export async function forgotPasswordHandler(req: AuthRequest, res: Response) {
         "If an account exists for this email, reset instructions will be sent shortly.",
     });
   } catch (err) {
-    return mapError(res, err, "Forgot password error:");
+    return mapError(req, res, err, "Forgot password error:");
   }
 }
 
 export async function refreshHandler(req: AuthRequest, res: Response) {
+  // SOURCE: refresh token is read from HttpOnly cookie issued during login/signup.
+  // RISK: accepting missing/invalid refresh token can create unauthorized session renewal.
+  // PROTECTION: require cookie refresh token, rotate it server-side, and return 401 on invalid session.
+  // RESULT: access renewal remains bound to valid stored refresh session state.
   const refreshToken = req.cookies?.[COOKIE_NAMES.sellerRefresh];
 
   if (!refreshToken || typeof refreshToken !== "string") {
@@ -113,10 +119,27 @@ export async function refreshHandler(req: AuthRequest, res: Response) {
 
     return res.json({ success: true });
   } catch (err) {
-    console.error("Refresh session error:", err);
-    clearSellerAuthCookies(res);
-    clearCsrfCookie(res);
-    return res.status(500).json({ error: "Server error" });
+    // SOURCE: refresh path can fail from storage contention/network/provider issues.
+    // RISK: clearing cookies on transient server failures can force unnecessary logouts.
+    // PROTECTION: preserve session cookies for transient 5xx refresh errors and return traceable requestId.
+    // RESULT: clients can retry refresh safely without immediate session loss.
+    const requestId = getRequestId(req);
+
+    if (err instanceof AuthServiceError) {
+      if (err.status >= 500) {
+        console.error("Refresh session error:", { requestId, err });
+        return res.status(err.status).json({ error: err.message, requestId });
+      }
+
+      clearSellerAuthCookies(res);
+      clearCsrfCookie(res);
+      return res.status(err.status).json({ error: err.message });
+    }
+
+    console.error("Refresh session error:", { requestId, err });
+    return res
+      .status(503)
+      .json({ error: "Temporary session issue. Please retry.", requestId });
   }
 }
 
@@ -156,7 +179,7 @@ export async function meHandler(req: AuthRequest, res: Response) {
     const user = await getUserById(userId);
     return res.json({ user });
   } catch (err) {
-    return mapError(res, err, "Me error:");
+    return mapError(req, res, err, "Me error:");
   }
 }
 
@@ -171,6 +194,6 @@ export async function updateMeHandler(req: AuthRequest, res: Response) {
     const user = await updateUserName(userId, trimmedName);
     return res.json({ user });
   } catch (err) {
-    return mapError(res, err, "Update profile error:");
+    return mapError(req, res, err, "Update profile error:");
   }
 }

@@ -54,6 +54,10 @@ export async function updateDeliveryZoneByUser(
 
   values.push(deliveryZoneId, userId);
 
+  // SOURCE: dynamic update fields come from validated optional delivery zone payload.
+  // RISK: unscoped update can mutate another seller's delivery configuration.
+  // PROTECTION: execute update with both zone id and user id predicates.
+  // RESULT: delivery zone mutations stay scoped to owning seller.
   const result = await pool.query(
     `UPDATE delivery_zones
      SET ${updates.join(", ")}

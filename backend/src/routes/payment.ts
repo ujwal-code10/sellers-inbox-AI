@@ -33,6 +33,10 @@ const esewaVerifyRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// SOURCE: payment requests include seller dashboard actions and payment provider callbacks.
+// RISK: weak route protection can allow spam submissions or unbounded verify attempts.
+// PROTECTION: require auth for seller-owned payment state and rate-limit sensitive submit/verify paths.
+// RESULT: payment flows remain controllable, auditable, and resistant to abuse bursts.
 router.get("/plans", auth, getPlansHandler);
 router.get("/manual-qr/config", auth, getManualQrConfigHandler);
 router.get("/manual-qr/status", auth, getManualQrStatusHandler);

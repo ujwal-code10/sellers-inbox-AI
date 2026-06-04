@@ -8,6 +8,8 @@ import { incrementReplyCount } from "../middleware/checkPlan.js";
 import { SellerIntent, SuggestReplyInput, SuggestReplyResponse } from "../models/ai.js";
 import { logAIUsage } from "./aiUsageService.js";
 
+type MessageComplexity = "SHORT" | "MEDIUM_OR_COMPLEX";
+
 const AI_SELECTION_DEBUG_ENABLED =
   process.env.ENABLE_AI_SELECTION_DEBUG === "true" &&
   process.env.NODE_ENV !== "production";
@@ -190,6 +192,74 @@ function hasAvailabilitySignal(message: string): boolean {
   );
 }
 
+function formatNaturalList(values: string[]): string {
+  const cleaned = values.map((value) => value.trim()).filter(Boolean);
+  if (cleaned.length === 0) {
+    return "";
+  }
+
+  if (cleaned.length === 1) {
+    return cleaned[0];
+  }
+
+  if (cleaned.length === 2) {
+    return `${cleaned[0]} ra ${cleaned[1]}`;
+  }
+
+  const allButLast = cleaned.slice(0, -1).join(", ");
+  return `${allButLast} ra ${cleaned[cleaned.length - 1]}`;
+}
+
+function hasListRequestSignal(message: string): boolean {
+  const normalized = message
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return (
+    /\b(kun|kunkun|what|which|all|sab|sabai|haru)\b/.test(normalized) ||
+    normalized.includes("kun kun") ||
+    normalized.includes("kun-kun")
+  );
+}
+
+function asksForSizeOptions(message: string): boolean {
+  const lowerMsg = message.toLowerCase();
+  const asksListSignal = hasListRequestSignal(message);
+
+  return /\bsize(s)?\b/.test(lowerMsg) && asksListSignal;
+}
+
+function asksForColorOptions(message: string): boolean {
+  const lowerMsg = message.toLowerCase();
+  const asksListSignal = hasListRequestSignal(message);
+
+  return /\b(color|colour|colors|colours|rang)\b/.test(lowerMsg) && asksListSignal;
+}
+
+function classifyMessageComplexity(message: string): MessageComplexity {
+  const compact = message
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!compact) {
+    return "SHORT";
+  }
+
+  const tokenCount = compact.split(" ").filter(Boolean).length;
+  const hasJoiner = /\b(ra|and|ani|plus|also|with|sanga)\b/.test(compact);
+  const questionMarks = message.match(/\?/g)?.length ?? 0;
+
+  if (tokenCount <= 4 && compact.length <= 32 && !hasJoiner && questionMarks <= 1) {
+    return "SHORT";
+  }
+
+  return "MEDIUM_OR_COMPLEX";
+}
+
 function normalizeLookupText(value: string): string {
   return value
     .toLowerCase()
@@ -254,9 +324,9 @@ function findMentionedSize(message: string, productVariants: any[]): string | un
         `(?:^|\\s)${escapeRegExp(normalizedSize)}(?:\\s|$)`
       );
       const sizePattern = new RegExp(
-        `${escapeRegExp(normalizedSize)}\\s*size|size\\s*${escapeRegExp(
+        `\\b${escapeRegExp(normalizedSize)}\\b\\s*size\\b|\\bsize\\b\\s*${escapeRegExp(
           normalizedSize
-        )}`
+        )}\\b`
       );
 
       if (wordPattern.test(normalizedMessage) || sizePattern.test(normalizedMessage)) {
@@ -285,6 +355,8 @@ function buildForcedFollowUpAvailabilityReply(params: {
 }): string {
   const { customerMessage, product, productVariants } = params;
   const availableVariants = productVariants.filter((variant) => Boolean(variant.available));
+  const sizeOptionsAsked = asksForSizeOptions(customerMessage);
+  const colorOptionsAsked = asksForColorOptions(customerMessage);
 
   const requestedColor = findMentionedColor(customerMessage, productVariants);
   const requestedSize = findMentionedSize(customerMessage, productVariants);
@@ -304,6 +376,54 @@ function buildForcedFollowUpAvailabilityReply(params: {
       return `${requestedColor} ${requestedSize} size ma available cha.`;
     }
     return `${requestedColor} ${requestedSize} size aaile available chaina.`;
+  }
+
+  if (requestedColor && sizeOptionsAsked) {
+    const sizesForColor = getUniqueVariantValues(
+      availableVariants.filter(
+        (variant) => String(variant.color).toLowerCase() === requestedColor.toLowerCase()
+      ),
+      "size"
+    );
+
+    if (sizesForColor.length > 0) {
+      return `${requestedColor} color ma available size ${formatNaturalList(sizesForColor)} cha.`;
+    }
+
+    return `${requestedColor} color ma size aaile available chaina.`;
+  }
+
+  if (requestedSize && colorOptionsAsked) {
+    const colorsForSize = getUniqueVariantValues(
+      availableVariants.filter(
+        (variant) => String(variant.size).toLowerCase() === requestedSize.toLowerCase()
+      ),
+      "color"
+    );
+
+    if (colorsForSize.length > 0) {
+      return `${requestedSize} size ma available color ${formatNaturalList(colorsForSize)} cha.`;
+    }
+
+    return `${requestedSize} size ma color aaile available chaina.`;
+  }
+
+  if (sizeOptionsAsked) {
+    const sizes = getUniqueVariantValues(availableVariants, "size");
+    if (sizes.length > 0) {
+      return `${product.name} ma available size ${formatNaturalList(sizes)} cha.`;
+    }
+
+    return `${product.name} ko size aaile available chaina.`;
+  }
+
+  if (colorOptionsAsked) {
+    const colors = getUniqueVariantValues(availableVariants, "color");
+    if (colors.length > 0) {
+      return `${product.name} ma available color ${formatNaturalList(colors)} cha.`;
+    }
+
+    return `${product.name} ko color aaile available chaina.`;
   }
 
   if (requestedColor) {
@@ -327,10 +447,31 @@ function buildForcedFollowUpAvailabilityReply(params: {
   return `${product.name} aaile sold out cha.`;
 }
 
+function findMatchedProductByName(
+  products: any[],
+  productName?: string
+): any | null {
+  if (!productName) {
+    return null;
+  }
+
+  const normalizedTarget = productName.trim().toLowerCase();
+  if (!normalizedTarget) {
+    return null;
+  }
+
+  return (
+    products.find(
+      (product: any) => String(product.name).trim().toLowerCase() === normalizedTarget
+    ) || null
+  );
+}
+
 function buildContextMessage(params: {
   customerMessage: string;
   backendIntent: SellerIntent;
   priceAskedInMessage: boolean;
+  messageComplexity: MessageComplexity;
   followUpContext: boolean;
   forcedProductInstruction: string;
   productsForPrompt: any[];
@@ -343,6 +484,7 @@ Customer Message: ${params.customerMessage}
 
 Backend Intent: ${params.backendIntent}
 Price asked in this message: ${params.priceAskedInMessage ? "YES" : "NO"}
+Message Complexity: ${params.messageComplexity}
 Conversation Stage: ${params.followUpContext ? "FOLLOW_UP" : "FIRST_MESSAGE"}
 Backend Instruction:
 - If price asked is NO, do NOT include price in the reply.
@@ -352,6 +494,16 @@ Backend Instruction:
 - For follow-up availability questions, answer only what is asked.
 - If customer asks only size, do not list all colors.
 - If customer asks only color, do not list all sizes.
+
+Reply Planning Instruction:
+- If message complexity is SHORT:
+  - Keep reply to one short line.
+  - Answer the asked intent only.
+  - Do NOT add extra details unless explicitly asked in the same message.
+- If message complexity is MEDIUM_OR_COMPLEX:
+  - Line 1: answer the main intent immediately.
+  - Line 2: add only ONE next useful detail (price, variant, delivery, or COD) if relevant.
+  - Do NOT add more than two short lines unless customer clearly asked a combo question.
 
   ${params.forcedProductInstruction}
 
@@ -392,6 +544,175 @@ function formatPrice(value: unknown): string {
 
 function buildForcedPriceReply(product: { name: string; price: unknown }): string {
   return `${product.name} ko price Rs. ${formatPrice(product.price)} ho.`;
+}
+
+function joinReplyLines(primaryLine: string, nextDetailLine?: string | null): string {
+  const main = primaryLine.trim();
+  const extra = nextDetailLine?.trim() || "";
+
+  if (!extra) {
+    return main;
+  }
+
+  const mainNorm = normalizeLookupText(main);
+  const extraNorm = normalizeLookupText(extra);
+
+  if (!extraNorm || extraNorm === mainNorm || mainNorm.includes(extraNorm)) {
+    return main;
+  }
+
+  return `${main} ${extra}`;
+}
+
+function buildAvailableSizeDetail(productName: string, productVariants: any[]): string | null {
+  const sizes = getUniqueVariantValues(
+    productVariants.filter((variant) => Boolean(variant.available)),
+    "size"
+  );
+
+  if (sizes.length === 0) {
+    return null;
+  }
+
+  return `${productName} ma available size ${formatNaturalList(sizes)} cha.`;
+}
+
+function buildAvailableColorDetail(productName: string, productVariants: any[]): string | null {
+  const colors = getUniqueVariantValues(
+    productVariants.filter((variant) => Boolean(variant.available)),
+    "color"
+  );
+
+  if (colors.length === 0) {
+    return null;
+  }
+
+  return `${productName} ma available color ${formatNaturalList(colors)} cha.`;
+}
+
+function buildSizesForColorDetail(requestedColor: string, productVariants: any[]): string | null {
+  const sizesForColor = getUniqueVariantValues(
+    productVariants.filter(
+      (variant) =>
+        Boolean(variant.available) &&
+        String(variant.color).toLowerCase() === requestedColor.toLowerCase()
+    ),
+    "size"
+  );
+
+  if (sizesForColor.length === 0) {
+    return null;
+  }
+
+  return `${requestedColor} color ko size options ${formatNaturalList(sizesForColor)} ma cha.`;
+}
+
+function buildColorsForSizeDetail(requestedSize: string, productVariants: any[]): string | null {
+  const colorsForSize = getUniqueVariantValues(
+    productVariants.filter(
+      (variant) =>
+        Boolean(variant.available) &&
+        String(variant.size).toLowerCase() === requestedSize.toLowerCase()
+    ),
+    "color"
+  );
+
+  if (colorsForSize.length === 0) {
+    return null;
+  }
+
+  return `${requestedSize} size ko color options ${formatNaturalList(colorsForSize)} ma cha.`;
+}
+
+function buildMediumPriceReply(params: {
+  customerMessage: string;
+  product: { name: string; price: unknown };
+  productVariants: any[];
+}): string {
+  const { customerMessage, product, productVariants } = params;
+  const line1 = buildForcedPriceReply(product);
+  const requestedColor = findMentionedColor(customerMessage, productVariants);
+  const requestedSize = findMentionedSize(customerMessage, productVariants);
+  const sizeOptionsAsked = asksForSizeOptions(customerMessage);
+  const colorOptionsAsked = asksForColorOptions(customerMessage);
+
+  if (hasAvailabilitySignal(customerMessage)) {
+    const availabilityLine = buildForcedFollowUpAvailabilityReply({
+      customerMessage,
+      product,
+      productVariants,
+    });
+
+    return joinReplyLines(line1, availabilityLine);
+  }
+
+  let nextDetail: string | null = null;
+
+  if (requestedColor && !requestedSize) {
+    nextDetail = buildSizesForColorDetail(requestedColor, productVariants);
+  } else if (requestedSize && !requestedColor) {
+    nextDetail = buildColorsForSizeDetail(requestedSize, productVariants);
+  } else if (sizeOptionsAsked) {
+    nextDetail = buildAvailableColorDetail(product.name, productVariants);
+  } else if (colorOptionsAsked) {
+    nextDetail = buildAvailableSizeDetail(product.name, productVariants);
+  }
+
+  if (!nextDetail) {
+    nextDetail =
+      buildAvailableSizeDetail(product.name, productVariants) ||
+      buildAvailableColorDetail(product.name, productVariants) ||
+      (productVariants.some((variant) => Boolean(variant.available))
+        ? `${product.name} available cha.`
+        : `${product.name} aaile sold out cha.`);
+  }
+
+  return joinReplyLines(line1, nextDetail);
+}
+
+function buildMediumAvailabilityReply(params: {
+  customerMessage: string;
+  product: { name: string };
+  productVariants: any[];
+}): string {
+  const { customerMessage, product, productVariants } = params;
+  const line1 = buildForcedFollowUpAvailabilityReply({
+    customerMessage,
+    product,
+    productVariants,
+  });
+
+  const availableVariants = productVariants.filter((variant) => Boolean(variant.available));
+  const requestedColor = findMentionedColor(customerMessage, productVariants);
+  const requestedSize = findMentionedSize(customerMessage, productVariants);
+  const sizeOptionsAsked = asksForSizeOptions(customerMessage);
+  const colorOptionsAsked = asksForColorOptions(customerMessage);
+
+  if (sizeOptionsAsked) {
+    const colors = getUniqueVariantValues(availableVariants, "color");
+    if (colors.length === 0) {
+      return line1;
+    }
+
+    const line1WithoutTerminal = line1.replace(/[.!?]\s*$/, "");
+    return `${line1WithoutTerminal} ane color options ma available color ${formatNaturalList(colors)} cha.`;
+  }
+
+  let line2: string | null = null;
+
+  if (requestedColor && !requestedSize) {
+    line2 = buildSizesForColorDetail(requestedColor, availableVariants);
+  } else if (requestedSize && !requestedColor) {
+    line2 = buildColorsForSizeDetail(requestedSize, availableVariants);
+  } else if (colorOptionsAsked) {
+    line2 = buildAvailableSizeDetail(product.name, availableVariants);
+  } else {
+    line2 =
+      buildAvailableSizeDetail(product.name, availableVariants) ||
+      buildAvailableColorDetail(product.name, availableVariants);
+  }
+
+  return joinReplyLines(line1, line2);
 }
 
 export async function suggestReplyForUser(params: {
@@ -479,6 +800,10 @@ export async function suggestReplyForUser(params: {
       selectedProductName: selectedProduct ? selectedProduct.name : null,
     });
 
+    // SOURCE: forcedProductId comes from authenticated seller UI selection.
+    // RISK: if fallback silently broadens to all products, reply can drift or leak cross-product context.
+    // PROTECTION: resolve forcedProductId by user_id ownership; if missing return 400 selected product not found.
+    // RESULT: deterministic grounding and no semantic alias drift on constrained intents.
     if (hasForcedSelection && !selectedProduct) {
       logAiSelectionDebug("forced_selection_missing", {
         userId,
@@ -524,17 +849,43 @@ export async function suggestReplyForUser(params: {
     }
 
     const intent = detectIntent(input.customerMessage);
+    const messageComplexity = classifyMessageComplexity(input.customerMessage);
     const priceAskedInMessage = hasPriceSignal(input.customerMessage);
+
+    if (!selectedProduct && !productContext.productKnown && input.followUpContext) {
+      const hintedProduct = findMatchedProductByName(products, input.recentProducts[0]);
+      if (hintedProduct) {
+        productContext = {
+          productKnown: true,
+          matchedProduct: hintedProduct.name,
+          candidateProducts: [
+            hintedProduct.name,
+            ...(productContext.candidateProducts || []).filter(
+              (name) => name.toLowerCase() !== hintedProduct.name.toLowerCase()
+            ),
+          ].slice(0, 5),
+        };
+
+        logAiSelectionDebug("followup_recent_product_applied", {
+          userId,
+          hintedProductName: hintedProduct.name,
+          followUpContext: input.followUpContext,
+          recentProducts: input.recentProducts,
+        });
+      }
+    }
 
     const confidence = calculateConfidence({
       productKnown: productContext.productKnown,
       intent,
+      messageComplexity,
     });
 
     const decision = decideReply({
       intent,
       productKnown: productContext.productKnown,
       confidence,
+      messageComplexity,
     });
 
     const finalDecision = selectedProduct
@@ -549,6 +900,7 @@ export async function suggestReplyForUser(params: {
       action: finalDecision.action,
       reason: finalDecision.reason,
       intent,
+      messageComplexity,
       priceAskedInMessage,
       followUpContext: input.followUpContext,
       productKnown: productContext.productKnown,
@@ -595,13 +947,28 @@ export async function suggestReplyForUser(params: {
     const isPriceOnlyMessage =
       intent === "PRICE" && !hasAvailabilitySignal(input.customerMessage);
 
-    if (selectedProduct && isPriceOnlyMessage) {
-      const directReply = buildForcedPriceReply(selectedProduct);
+    // SOURCE: seller manually selected product for the current customer turn.
+    // RISK: short price+availability asks can still drift when sent through LLM.
+    // PROTECTION: for selected-product short PRICE intent, use deterministic reply path.
+    // RESULT: stable exact-product response for both price-only and combo asks.
+    if (selectedProduct && intent === "PRICE" && messageComplexity === "SHORT") {
+      const selectedProductVariants = variants.filter(
+        (variant: any) => Number(variant.product_id) === Number(selectedProduct.id)
+      );
 
-      logAiSelectionDebug("forced_price_reply", {
+      const directReply = isPriceOnlyMessage
+        ? buildForcedPriceReply(selectedProduct)
+        : buildMediumPriceReply({
+            customerMessage: input.customerMessage,
+            product: selectedProduct,
+            productVariants: selectedProductVariants,
+          });
+
+      logAiSelectionDebug("forced_short_price_reply", {
         userId,
         selectedProductId: Number(selectedProduct.id),
         selectedProductName: selectedProduct.name,
+        mode: isPriceOnlyMessage ? "price_only" : "price_with_availability",
         replyPreview: directReply,
       });
 
@@ -619,7 +986,7 @@ export async function suggestReplyForUser(params: {
         suggestions: [directReply],
         decision: {
           action: "REPLY",
-          reason: finalDecision.reason,
+          reason: `${finalDecision.reason} (short price deterministic rule)`,
           productKnown: true,
           matchedProduct: selectedProduct.name,
           intent,
@@ -628,21 +995,32 @@ export async function suggestReplyForUser(params: {
       };
     }
 
-    if (selectedProduct && input.followUpContext && intent === "AVAILABILITY") {
-      const selectedProductVariants = variants.filter(
-        (variant: any) => Number(variant.product_id) === Number(selectedProduct.id)
+    const contextualMatchedProduct = findMatchedProductByName(
+      products,
+      productContext.matchedProduct
+    );
+    const productForAvailabilityReply = selectedProduct || contextualMatchedProduct;
+
+    if (
+      productForAvailabilityReply &&
+      intent === "PRICE" &&
+      messageComplexity === "MEDIUM_OR_COMPLEX"
+    ) {
+      const productVariants = variants.filter(
+        (variant: any) =>
+          Number(variant.product_id) === Number(productForAvailabilityReply.id)
       );
 
-      const directReply = buildForcedFollowUpAvailabilityReply({
+      const directReply = buildMediumPriceReply({
         customerMessage: input.customerMessage,
-        product: selectedProduct,
-        productVariants: selectedProductVariants,
+        product: productForAvailabilityReply,
+        productVariants,
       });
 
-      logAiSelectionDebug("forced_followup_availability_reply", {
+      logAiSelectionDebug("forced_medium_price_reply", {
         userId,
-        selectedProductId: Number(selectedProduct.id),
-        selectedProductName: selectedProduct.name,
+        selectedProductId: Number(productForAvailabilityReply.id),
+        selectedProductName: productForAvailabilityReply.name,
         replyPreview: directReply,
       });
 
@@ -660,11 +1038,64 @@ export async function suggestReplyForUser(params: {
         suggestions: [directReply],
         decision: {
           action: "REPLY",
-          reason: `${finalDecision.reason} (follow-up availability concise rule)`,
+          reason: `${finalDecision.reason} (medium price deterministic next-detail rule)`,
           productKnown: true,
-          matchedProduct: selectedProduct.name,
+          matchedProduct: productForAvailabilityReply.name,
           intent,
-          productCandidates: [selectedProduct.name],
+          productCandidates: [productForAvailabilityReply.name],
+        },
+      };
+    }
+
+    if (
+      productForAvailabilityReply &&
+      intent === "AVAILABILITY" &&
+      !priceAskedInMessage
+    ) {
+      const selectedProductVariants = variants.filter(
+        (variant: any) =>
+          Number(variant.product_id) === Number(productForAvailabilityReply.id)
+      );
+
+      const directReply =
+        messageComplexity === "MEDIUM_OR_COMPLEX"
+          ? buildMediumAvailabilityReply({
+              customerMessage: input.customerMessage,
+              product: productForAvailabilityReply,
+              productVariants: selectedProductVariants,
+            })
+          : buildForcedFollowUpAvailabilityReply({
+              customerMessage: input.customerMessage,
+              product: productForAvailabilityReply,
+              productVariants: selectedProductVariants,
+            });
+
+      logAiSelectionDebug("forced_followup_availability_reply", {
+        userId,
+        selectedProductId: Number(productForAvailabilityReply.id),
+        selectedProductName: productForAvailabilityReply.name,
+        replyPreview: directReply,
+      });
+
+      await incrementReplyCount(userId);
+      await logAIUsage({
+        userId,
+        requestType: "suggest_reply",
+        inputTokens: 0,
+        outputTokens: 0,
+        latencyMs: 0,
+        status: "success",
+      });
+
+      return {
+        suggestions: [directReply],
+        decision: {
+          action: "REPLY",
+          reason: `${finalDecision.reason} (concise availability deterministic rule)`,
+          productKnown: true,
+          matchedProduct: productForAvailabilityReply.name,
+          intent,
+          productCandidates: [productForAvailabilityReply.name],
         },
       };
     }
@@ -708,6 +1139,7 @@ export async function suggestReplyForUser(params: {
       customerMessage: input.customerMessage,
       backendIntent: intent,
       priceAskedInMessage,
+      messageComplexity,
       followUpContext: input.followUpContext,
       forcedProductInstruction,
       productsForPrompt,

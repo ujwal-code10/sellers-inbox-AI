@@ -49,6 +49,10 @@ export function parseCreateVariantBody(body: unknown): VariantCreateInput {
 }
 
 export function parseCreateVariantsBulkBody(body: unknown): VariantBulkCreateInput {
+  // SOURCE: bulk variants payload is generated from frontend variant matrix inputs.
+  // RISK: duplicate color/size combos in one request can create conflicting inventory rows.
+  // PROTECTION: validate each variant row and reject duplicate color-size combinations.
+  // RESULT: variant service receives a clean, deduplicated bulk insert set.
   if (!isRecord(body)) {
     throw new VariantSchemaError("Invalid request body");
   }
@@ -86,11 +90,15 @@ export function parseVariantAvailabilityBody(
     throw new VariantSchemaError("Invalid request body");
   }
 
-  const { available } = body;
+  const { available, version } = body;
 
   if (typeof available !== "boolean") {
     throw new VariantSchemaError("available must be true or false");
   }
 
-  return { available };
+  if (!Number.isInteger(version) || (version as number) < 1) {
+    throw new VariantSchemaError("version must be a positive integer");
+  }
+
+  return { available, version: version as number };
 }

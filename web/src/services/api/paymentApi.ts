@@ -13,7 +13,6 @@ export const paymentApi = {
   },
 
   initiateEsewa(billing: BillingCycle): Promise<Record<string, unknown>> {
-    localStorage.setItem('esewa_billing', billing)
     return httpClient.request<Record<string, unknown>>('/payments/esewa/initiate', {
       method: 'POST',
       body: JSON.stringify({ billing }),
@@ -40,15 +39,14 @@ export const paymentApi = {
     })
   },
 
-  verifyEsewa(encodedData: string, billing?: string): Promise<Record<string, unknown>> {
-    const payload: { encodedData: string; billing?: string } = { encodedData }
-    if (billing) {
-      payload.billing = billing
-    }
-
+  verifyEsewa(encodedData: string): Promise<Record<string, unknown>> {
+    // SOURCE: encodedData is returned by eSewa redirect and signed server-verifiable fields.
+    // RISK: sending client billing hints can diverge from transaction UUID truth.
+    // PROTECTION: send encodedData only; backend derives billing and validates signature/provider status.
+    // RESULT: payment upgrade path remains server-authoritative.
     return httpClient.request<Record<string, unknown>>('/payments/esewa/verify', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ encodedData }),
     })
   },
 }
