@@ -64,7 +64,7 @@ export async function signupUser(
     };
   } catch (err: any) {
     if (err?.code === "23505") {
-      throw new AuthServiceError("Unable to create account", 400);
+      throw new AuthServiceError("An account with this email already exists", 400);
     }
 
     throw new AuthServiceError("Server error", 500);
