@@ -38,6 +38,10 @@ function toRecentProducts(value: unknown): string[] {
 }
 
 export function parseSuggestReplyBody(body: unknown): SuggestReplyInput {
+  // SOURCE: suggest-reply payload comes from dashboard message composer and product picker hints.
+  // RISK: malformed context hints can break deterministic AI guards or cause ambiguous routing.
+  // PROTECTION: validate core message fields and normalize optional context to safe defaults.
+  // RESULT: AI service receives a predictable request contract.
   if (!isRecord(body)) {
     throw new AISchemaError("Invalid request body");
   }

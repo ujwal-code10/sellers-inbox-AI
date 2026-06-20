@@ -13,6 +13,10 @@ export async function insertProduct(userId: number, input: ProductCreateInput) {
 }
 
 export async function selectProductsWithVariantsByUser(userId: number) {
+  // SOURCE: userId comes from authenticated session context.
+  // RISK: missing tenant filter can expose another seller's catalog.
+  // PROTECTION: enforce WHERE p.user_id = $1 and aggregate only joined variants for that scope.
+  // RESULT: product listing stays fully tenant-isolated.
   const result = await pool.query(
     `SELECT
        p.id,

@@ -75,6 +75,10 @@ export function parseManualQrSubmitBody(body: unknown): ManualQrSubmitInput {
 }
 
 export function parseEsewaVerifyBody(body: unknown): EsewaVerifyInput {
+  // SOURCE: eSewa success redirect posts encoded response payload to verify endpoint.
+  // RISK: accepting optional client hints can diverge from provider-signed transaction truth.
+  // PROTECTION: require encodedData only and leave billing/user derivation to service verification logic.
+  // RESULT: verify service starts from a minimal, tamper-resistant input contract.
   if (!isRecord(body)) {
     throw new PaymentSchemaError("Invalid request body");
   }
@@ -85,6 +89,5 @@ export function parseEsewaVerifyBody(body: unknown): EsewaVerifyInput {
 
   return {
     encodedData: body.encodedData,
-    billing: parseBillingCycle(body.billing),
   };
 }

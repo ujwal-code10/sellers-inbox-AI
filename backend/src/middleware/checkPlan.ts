@@ -12,6 +12,10 @@ export async function checkReplyLimit(
   try {
     const userId = req.userId!;
 
+    // SOURCE: plan status from subscriptions + daily usage from usage_daily.
+    // RISK: missing quota enforcement allows unlimited reply generation for free tier.
+    // PROTECTION: compute active pro status first, then hard-check free-tier daily reply cap.
+    // RESULT: usage policy is enforced consistently before AI generation.
     // Get user's plan
     const subRes = await pool.query(
       `SELECT plan, status, expires_at FROM subscriptions
@@ -99,6 +103,10 @@ export async function checkProductLimit(
 
     const limits = await getEffectiveFreeTierLimits();
 
+    // SOURCE: plan status from subscriptions + current catalog count from products table.
+    // RISK: allowing product creation past free cap weakens monetization and policy consistency.
+    // PROTECTION: deny product creation once free-tier max is reached unless active pro.
+    // RESULT: product onboarding remains aligned with plan entitlements.
     const countRes = await pool.query(
       `SELECT COUNT(*) as count FROM products WHERE user_id = $1`,
       [userId]

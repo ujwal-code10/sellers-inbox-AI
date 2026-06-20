@@ -61,6 +61,10 @@ export async function existsManualQrByReference(
   client: QueryExecutor,
   paymentReference: string
 ): Promise<boolean> {
+  // SOURCE: paymentReference is normalized at schema layer before reaching repository.
+  // RISK: duplicate manual reference acceptance can create conflicting approval outcomes.
+  // PROTECTION: explicit existence check under transaction lock before insert.
+  // RESULT: each manual reference is processed once.
   const result = await client.query(
     `SELECT id FROM transactions
      WHERE payment_method = 'manual_qr' AND payment_ref = $1
@@ -155,6 +159,10 @@ export async function upsertActiveProSubscription(
     paymentRef: string;
   }
 ): Promise<void> {
+  // SOURCE: verified payment data provides billing/expires/paymentRef values.
+  // RISK: separate insert/update logic can race and leave inconsistent subscription state.
+  // PROTECTION: single upsert statement keyed by user_id with full active-plan overwrite.
+  // RESULT: subscription state remains deterministic after each verified payment.
   await client.query(
     `INSERT INTO subscriptions
        (user_id, plan, billing, status, started_at, expires_at, payment_ref)

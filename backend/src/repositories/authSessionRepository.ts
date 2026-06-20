@@ -49,6 +49,10 @@ export async function selectActiveRefreshSessionForUpdate(
   tokenHash: string,
   tokenType: RefreshSessionTokenType
 ): Promise<RefreshSessionRow | null> {
+  // SOURCE: tokenHash is derived from presented refresh token in session rotation flow.
+  // RISK: without row-level lock, concurrent refresh requests can both rotate same session.
+  // PROTECTION: SELECT ... FOR UPDATE on active non-revoked token row.
+  // RESULT: refresh rotation becomes single-winner and replay-safe.
   const result = await client.query(
     `SELECT id, user_id, admin_id
      FROM auth_refresh_tokens

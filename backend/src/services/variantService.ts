@@ -8,6 +8,7 @@ import {
   insertVariantsBulk,
   insertVariant,
   selectVariantsForProductByUser,
+  selectVariantVersionByUser,
   updateVariantAvailabilityByUser,
 } from "../repositories/variantRepository.js";
 
@@ -57,6 +58,10 @@ export async function createVariantsBulk(
   input: VariantBulkCreateInput
 ) {
   try {
+    // SOURCE: bulk variant target product id is provided from route params.
+    // RISK: inserting variants without ownership check allows cross-tenant product mutation.
+    // PROTECTION: verify product belongs to authenticated user before bulk insert.
+    // RESULT: variant creation remains tenant-isolated.
     const hasOwnerAccess = await existsProductForUser(userId, productId);
 
     if (!hasOwnerAccess) {
@@ -82,7 +87,15 @@ export async function updateVariantAvailability(
     const updated = await updateVariantAvailabilityByUser(userId, variantId, input);
 
     if (!updated) {
-      throw new VariantServiceError("Variant not found or access denied", 404);
+      const existing = await selectVariantVersionByUser(userId, variantId);
+      if (!existing) {
+        throw new VariantServiceError("Variant not found or access denied", 404);
+      }
+
+      throw new VariantServiceError(
+        "Variant was updated by another session. Refresh and try again.",
+        409
+      );
     }
 
     return updated;

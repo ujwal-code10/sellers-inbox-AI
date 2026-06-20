@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/auth.js";
+import { getRequestId } from "../utils/requestContext.js";
 import {
   parseBillingCycle,
   parseEsewaVerifyBody,
@@ -19,6 +20,7 @@ import {
 } from "../services/paymentService.js";
 
 function handlePaymentError(
+  req: Request,
   res: Response,
   err: unknown,
   fallbackMessage: string,
@@ -28,8 +30,9 @@ function handlePaymentError(
     return res.status(err.status).json({ error: err.message });
   }
 
-  console.error(logPrefix, err);
-  return res.status(500).json({ error: fallbackMessage });
+  const requestId = getRequestId(req);
+  console.error(logPrefix, { requestId, err });
+  return res.status(500).json({ error: fallbackMessage, requestId });
 }
 
 function getAuthedUserId(req: AuthRequest): number | null {
@@ -50,7 +53,7 @@ export async function getPlansHandler(req: AuthRequest, res: Response) {
     const data = await getPlansOverview(userId);
     return res.json(data);
   } catch (err) {
-    return handlePaymentError(res, err, "Server error", "Payment plans error:");
+    return handlePaymentError(req, res, err, "Server error", "Payment plans error:");
   }
 }
 
@@ -69,6 +72,7 @@ export async function getManualQrStatusHandler(req: AuthRequest, res: Response) 
     return res.json(data);
   } catch (err) {
     return handlePaymentError(
+      req,
       res,
       err,
       "Could not load payment status",
@@ -96,6 +100,7 @@ export async function submitManualQrHandler(req: AuthRequest, res: Response) {
     return res.status(201).json(result);
   } catch (err) {
     return handlePaymentError(
+      req,
       res,
       err,
       "Could not submit payment",
@@ -131,6 +136,7 @@ export function initiateEsewaHandler(req: AuthRequest, res: Response) {
     return res.json(data);
   } catch (err) {
     return handlePaymentError(
+      req,
       res,
       err,
       "Could not initiate eSewa payment",
@@ -147,10 +153,20 @@ export async function verifyEsewaHandler(req: Request, res: Response) {
   }
 
   try {
+    // SOURCE: eSewa redirect sends encoded transaction payload to this endpoint.
+    // RISK: accepting malformed payloads can bypass verification or trigger invalid upgrades.
+    // PROTECTION: parse and normalize body first, then delegate to service-level signature/provider checks.
+    // RESULT: only verified payments can activate plan upgrades.
     const parsedBody = parseEsewaVerifyBody(req.body);
     const result = await verifyEsewaPayment(parsedBody);
     return res.json(result);
   } catch (err) {
-    return handlePaymentError(res, err, "Verification failed", "eSewa verify error:");
+    return handlePaymentError(
+      req,
+      res,
+      err,
+      "Verification failed",
+      "eSewa verify error:"
+    );
   }
 }

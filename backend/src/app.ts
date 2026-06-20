@@ -1,9 +1,11 @@
 import "dotenv/config";
+import crypto from "crypto";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { installProductionConsoleSafety } from "./utils/logger.js";
+import type { RequestWithId } from "./utils/requestContext.js";
 
 installProductionConsoleSafety();
 
@@ -75,7 +77,7 @@ function getAllowedOrigins(): Set<string> {
   }
 
   if (process.env.NODE_ENV !== "production") {
-    ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"].forEach(addOrigin);
+    // Intentionally removed dev origins for CORS break test.
   }
 
   return origins;
@@ -94,6 +96,54 @@ const app = express();
 if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
 }
+
+app.use((req, res, next) => {
+  const request = req as RequestWithId;
+  const incomingRequestIdHeader = req.headers["x-request-id"];
+  const incomingRequestId =
+    typeof incomingRequestIdHeader === "string"
+      ? incomingRequestIdHeader.trim()
+      : Array.isArray(incomingRequestIdHeader)
+        ? (incomingRequestIdHeader[0] || "").trim()
+        : "";
+
+  const requestId =
+    incomingRequestId.length > 0 && incomingRequestId.length <= 128
+      ? incomingRequestId
+      : crypto.randomUUID();
+
+  request.requestId = requestId;
+  res.setHeader("X-Request-Id", requestId);
+
+  const startedAt = process.hrtime.bigint();
+
+  res.on("finish", () => {
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    const logPayload = {
+      requestId,
+      method: req.method,
+      path: req.originalUrl,
+      status: res.statusCode,
+      duration_ms: Number(durationMs.toFixed(1)),
+    };
+
+    if (res.statusCode >= 500) {
+      console.error("HTTP request completed", logPayload);
+      return;
+    }
+
+    if (res.statusCode >= 400) {
+      console.warn("HTTP request completed", logPayload);
+      return;
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+      console.info("HTTP request completed", logPayload);
+    }
+  });
+
+  next();
+});
 
 app.disable("x-powered-by");
 app.use(helmet());

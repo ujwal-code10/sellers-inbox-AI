@@ -73,6 +73,10 @@ export async function updateProductHandler(req: AuthRequest, res: Response) {
   }
 
   try {
+    // SOURCE: product id arrives from route param and mutation payload from seller form input.
+    // RISK: missing/invalid params can lead to unsafe default updates or confusing 500s.
+    // PROTECTION: require single param and parse body schema before service call.
+    // RESULT: update flow reaches service with explicit target and validated fields.
     const productId = requireSingleParam(req.params.id, "Product id");
     const input = parseUpdateProductBody(req.body);
     const product = await updateProduct(userId, productId, input);

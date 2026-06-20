@@ -254,6 +254,10 @@ export async function submitManualQrPayment(params: {
   try {
     await client.query("BEGIN");
 
+    // SOURCE: paymentReference and userId come from authenticated seller submit request.
+    // RISK: concurrent submits can create duplicate references or multiple pending requests.
+    // PROTECTION: advisory locks + duplicate reference check + single pending request enforcement.
+    // RESULT: manual QR submission is idempotent and review queue stays consistent.
     await acquireAdvisoryLock(client, `manual_qr_ref:${input.paymentReference}`);
     await acquireAdvisoryLock(client, `manual_qr_user:${userId}`);
 
@@ -402,12 +406,15 @@ export async function verifyEsewaPayment(input: EsewaVerifyInput) {
   }
 
   const parsedUuid = parseEsewaTransactionUuid(transactionUuid);
-  if (!parsedUuid.userId) {
+  // SOURCE: transaction_uuid is generated server-side during initiation and covered by signature checks.
+  // RISK: accepting client-side billing hints can cause verification/upgrade mismatches.
+  // PROTECTION: derive user and billing strictly from signed transaction_uuid and reject invalid format.
+  // RESULT: payment verification trust path is server-authoritative.
+  if (!parsedUuid.userId || !parsedUuid.billing) {
     throw new PaymentServiceError("Invalid transaction UUID", 400);
   }
 
-  const fallbackBilling = input.billing || "monthly";
-  const resolvedBilling = parsedUuid.billing || fallbackBilling;
+  const resolvedBilling = parsedUuid.billing;
   const targetUserId = parsedUuid.userId;
 
   const expectedAmount = getPlanAmount(resolvedBilling);
@@ -447,6 +454,13 @@ export async function verifyEsewaPayment(input: EsewaVerifyInput) {
   if (
     typeof verifyData.transaction_uuid === "string" &&
     verifyData.transaction_uuid !== transactionUuid
+  ) {
+    throw new PaymentServiceError("Verification mismatch", 400);
+  }
+
+  if (
+    typeof verifyData.transaction_code === "string" &&
+    verifyData.transaction_code !== transactionCode
   ) {
     throw new PaymentServiceError("Verification mismatch", 400);
   }

@@ -15,6 +15,10 @@ export default function auth(
   res: Response,
   next: NextFunction
 ) {
+  // SOURCE: session token can arrive via legacy Authorization header or primary HttpOnly cookie.
+  // RISK: trusting cookie auth on unsafe methods without CSRF check enables cross-site request abuse.
+  // PROTECTION: detect token source and enforce CSRF validation for cookie-based unsafe methods.
+  // RESULT: backward compatibility remains while preserving cookie-session security guarantees.
   const header = req.headers.authorization;
 
   let tokenSource: "header" | "cookie" | null = null;

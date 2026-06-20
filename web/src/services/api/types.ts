@@ -95,6 +95,7 @@ export interface Variant {
   color: string
   size: string
   available: boolean
+  version: number
 }
 
 export interface DeliveryZone {

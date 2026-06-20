@@ -14,7 +14,6 @@ export interface ManualQrSubmitInput {
 
 export interface EsewaVerifyInput {
   encodedData: string;
-  billing: BillingCycle | null;
 }
 
 export const PLAN_PRICES = {

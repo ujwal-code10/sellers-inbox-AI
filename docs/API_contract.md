@@ -6,6 +6,7 @@ Source of truth: [MASTER_SPEC.md](../MASTER_SPEC.md)
 - Base URL (local): http://localhost:4000
 - API prefix: `/api`
 - Standard error: `{ "error": "message" }`
+- Unexpected server errors may include `{ "error": "...", "requestId": "..." }` for tracing
 - Paywall error: `{ "error": "...", "upgrade": true }`
 
 ## Authentication Model
@@ -26,7 +27,8 @@ Source of truth: [MASTER_SPEC.md](../MASTER_SPEC.md)
   - Request: `{ email, password }`
   - Response: `{ user }` and auth cookies are set
 - POST `/refresh`
-  - Response: `{ success: true }` and rotated auth cookies
+  - Success response: `{ success: true }` and rotated auth cookies
+  - Transient failure response: `503` with `{ error, requestId }` (cookies are not cleared so retry is possible)
 - POST `/logout`
   - Response: `{ message }` and cookies cleared
 - GET `/me`
@@ -105,6 +107,8 @@ Source of truth: [MASTER_SPEC.md](../MASTER_SPEC.md)
   - Submission remains pending until admin approves/rejects
 - POST `/esewa/initiate`
 - POST `/esewa/verify`
+  - Request: `{ encodedData }`
+  - Billing is derived server-side from signed `transaction_uuid` (client billing hints are ignored)
 
 ## Admin (`/api/admin`)
 

@@ -7,7 +7,9 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: seller_inbox
+      POSTGRES_DB: 
+      TZ: Asia/Kathmandu
+      PGTZ: Asia/Kathmandu
     ports:
       - "5432:5432"
     volumes:

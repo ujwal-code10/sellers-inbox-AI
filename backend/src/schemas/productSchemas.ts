@@ -14,7 +14,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function hasMeaningfulName(value: string): boolean {
+  return /[\p{L}\p{N}]/u.test(value);
+}
+
 export function parseCreateProductBody(body: unknown): ProductCreateInput {
+  // SOURCE: product create payload comes from seller onboarding/catalog forms.
+  // RISK: unchecked values can create invalid pricing/name data for AI and checkout flows.
+  // PROTECTION: enforce required fields and numeric/text bounds before typed output.
+  // RESULT: product service receives valid product records ready for persistence.
   if (!isRecord(body)) {
     throw new ProductSchemaError("Invalid request body");
   }
@@ -27,6 +35,12 @@ export function parseCreateProductBody(body: unknown): ProductCreateInput {
 
   if (typeof name !== "string" || name.trim().length === 0 || name.length > 255) {
     throw new ProductSchemaError("Product name must be 1-255 characters");
+  }
+
+  if (!hasMeaningfulName(name)) {
+    throw new ProductSchemaError(
+      "Product name must include at least one letter or number"
+    );
   }
 
   if (typeof price !== "number" || price <= 0 || price > 10000000 || !isFinite(price)) {
@@ -63,6 +77,12 @@ export function parseUpdateProductBody(body: unknown): ProductUpdateInput {
     (typeof name !== "string" || name.trim().length === 0 || name.length > 255)
   ) {
     throw new ProductSchemaError("Product name must be 1-255 characters");
+  }
+
+  if (typeof name === "string" && !hasMeaningfulName(name)) {
+    throw new ProductSchemaError(
+      "Product name must include at least one letter or number"
+    );
   }
 
   if (

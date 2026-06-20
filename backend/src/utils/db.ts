@@ -14,10 +14,31 @@ if (!isProduction) {
   );
 }
 
-const pool = process.env.DATABASE_URL
+const connectionString = process.env.DATABASE_URL;
+
+function shouldUseSsl(connString?: string): boolean {
+  if (!connString) return false;
+
+  try {
+    const url = new URL(connString);
+    const sslMode = url.searchParams.get("sslmode")?.toLowerCase();
+    const host = url.hostname.toLowerCase();
+    const isLocalHost = host === "localhost" || host === "127.0.0.1";
+
+    if (sslMode === "disable" || isLocalHost) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const pool = connectionString
   ? new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
+      connectionString,
+      ...(shouldUseSsl(connectionString) ? { ssl: { rejectUnauthorized: false } } : {}),
       max: 5,
     })
   : new Pool({

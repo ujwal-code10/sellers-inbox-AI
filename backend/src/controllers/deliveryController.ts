@@ -73,6 +73,10 @@ export async function updateDeliveryZoneHandler(req: AuthRequest, res: Response)
   }
 
   try {
+    // SOURCE: zone id comes from route and zone fields come from seller delivery settings form.
+    // RISK: partial/invalid zone updates can break downstream delivery quote context.
+    // PROTECTION: enforce param presence and parse allowed update fields before service call.
+    // RESULT: delivery service handles only normalized zone mutation requests.
     const zoneId = requireSingleParam(req.params.id, "Delivery zone id");
     const input = parseUpdateDeliveryZoneBody(req.body);
     const zone = await updateDeliveryZone(userId, zoneId, input);
